@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+my treds — это спокойный интеллектуальный помощник, который организует информацию в виде тредов (threads), запоминает контент и позволяет искать по нему и общаться с LLM‑ассистентом.
 
-## Getting Started
+### Стек
 
-First, run the development server:
+- **Frontend**: Next.js (App Router, TypeScript), React, Tailwind CSS (v4).
+- **Backend**: Next.js Route Handlers (Node.js, TypeScript).
+- **БД**: SQLite через Prisma (с заделом на миграцию в PostgreSQL).
+- **Аутентификация**: собственные модели пользователей, сессий и устройств.
+
+### Основные возможности (на текущем этапе)
+
+- Регистрация и вход по email, имени и паролю, remember device.
+- Восстановление пароля по email (локально токен возвращается в API).
+- Треды пользователя:
+  - статусы: активный / архив / удалённый;
+  - создание и смена статуса.
+- Наполнение треда контентом:
+  - текстовый ввод с защитой от дублей (по хэшу);
+  - **добавление по ссылке**: вставка URL → загрузка страницы, извлечение текста (cheerio), опциональный перевод на язык пользователя через LLM, сохранение в тред.
+- Поиск по контенту: полнотекстовый поиск по треду или глобально.
+- **Чат с помощником (LLM)** в контексте треда: вопросы по смыслу, выжимки, пересказ по загруженному контенту. Используется локальная Ollama (по умолчанию `llama3.2`).
+
+## Запуск локально
+
+Требования:
+
+- Node.js 20+
+- npm
+
+Установка зависимостей:
+
+```bash
+npm install
+```
+
+Создайте `.env` на основе примера (при необходимости укажите `OLLAMA_URL` и `OLLAMA_MODEL`):
+
+```bash
+cp .env.example .env
+```
+
+Для чата и перевода по ссылкам нужна запущенная [Ollama](https://ollama.ai) и модель, например:
+
+```bash
+ollama run llama3.2
+```
+
+Примените миграции Prisma (создаст `dev.db`):
+
+```bash
+npx prisma migrate dev
+```
+
+Запустите dev‑сервер:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Приложение будет доступно по адресу `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Если после смены версий (например Prisma) появляется ошибка про «engine type client» или старый код:** удалите кэш Next.js и запустите снова:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+rm -rf .next
+npm run dev
+```
 
-## Learn More
+## Что уже можно попробовать
 
-To learn more about Next.js, take a look at the following resources:
+1. Открыть `http://localhost:3000`.
+2. Зарегистрировать пользователя (страница `/register`).
+3. Залогиниться (страница `/login`).
+4. Перейти на страницу тредов `/threads`:
+   - создать новый тред,
+   - переключаться между фильтрами «Активные / Архив / Удалённые»,
+   - выбрать тред и добавить в него текстовый контент,
+   - попробовать добавить тот же текст ещё раз — увидите сообщение о дубликате,
+   - выполнить поиск по тексту в пределах выбранного треда или глобально;
+   - **добавить контент по ссылке**: вставить URL, при желании включить «Перевести на мой язык», нажать «Добавить по ссылке»;
+   - в блоке **«Чат с помощником»** задать вопрос по контенту (например: «сделай выжимку из этого источника») — ответ даёт LLM по контексту треда.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Структура БД (кратко)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `User` — пользователи, с настройками языка, стиля общения и часового пояса.
+- `Session`, `Device` — сессии и «запомненные» устройства.
+- `PasswordResetToken`, `MagicLinkToken`, `Account` — восстановление, магические ссылки и будущие интеграции Google/Apple.
+- `Thread` — треды пользователя со статусами (ACTIVE, ARCHIVED, DELETED).
+- `ThreadMessage` — сообщения в треде (LLM‑чат будет строиться поверх них).
+- `ContentItem` — фрагменты контента (источник: TEXT_INPUT/URL/FILE), с полем `contentHash` и уникальным индексом `@@unique([threadId, contentHash])` для защиты от дублей.
 
-## Deploy on Vercel
+## Дальнейшее развитие
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Добавление контента из файлов (PDF, DOCX).
+- Другие LLM‑провайдеры (облачные API), смена модели через env.
+- Планировщик задач, биллинг и тарифы.
+- Миграция с SQLite на PostgreSQL.

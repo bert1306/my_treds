@@ -1,26 +1,109 @@
 @import "tailwindcss";
 
+/* Mint Flow design system */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --mint: #7dd3c0;
+  --mint-hover: #6bc4b0;
+  --mint-active: #5ab5a0;
+  --ocean: #2a5b6f;
+  --ocean-hover: #234a5a;
+  --ocean-50: rgba(42, 91, 111, 0.5);
+  --ivory: #f8f6f3;
+  --shadow-mint: rgba(125, 211, 192, 0.25);
+  --shadow-card: rgba(42, 91, 111, 0.08);
+  --background: var(--ivory);
+  --foreground: var(--ocean);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-mint: var(--mint);
+  --color-mint-hover: var(--mint-hover);
+  --color-mint-active: var(--mint-active);
+  --color-ocean: var(--ocean);
+  --color-ocean-hover: var(--ocean-hover);
+  --color-ocean-50: var(--ocean-50);
+  --color-ivory: var(--ivory);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #1a1a2e;
+    --foreground: var(--mint);
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+/* Чекбоксы: активный цвет — мятный из палитры (не синий) */
+input[type="checkbox"] {
+  accent-color: #7dd3c0 !important;
+}
+
+/* Chat UI (LLM screen spec) */
+:root {
+  --chat-primary: #7dd3c0;
+  --chat-primary-hover: #6bc4b0;
+  --chat-secondary: #2a5b6f;
+  --chat-bg: #f8f6f3;
+  --chat-surface: #ffffff;
+  --chat-text-muted: rgba(42, 91, 111, 0.5);
+  --chat-shadow-bubble: 0 1px 2px rgba(42, 91, 111, 0.06);
+  --chat-radius-lg: 18px;
+  --chat-radius-xl: 24px;
+}
+
+@keyframes messageAppear {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes typingBounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-4px);
+  }
+}
+
+.chat-messages-scroll {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(42, 91, 111, 0.3) transparent;
+}
+.chat-messages-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-messages-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-messages-scroll::-webkit-scrollbar-thumb {
+  background: rgba(42, 91, 111, 0.3);
+  border-radius: 3px;
+}
+.chat-messages-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(42, 91, 111, 0.5);
+}
+
+.chat-bubble-appear {
+  animation: messageAppear 0.3s ease-out;
+}
+
+.chat-typing-dot {
+  animation: typingBounce 0.6s infinite;
 }
