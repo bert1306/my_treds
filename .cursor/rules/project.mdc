@@ -1,0 +1,17 @@
+---
+description: Контекст проекта my_treds — стек, деплой на Beget, как запускать команды на сервере
+alwaysApply: true
+---
+
+# my_treds — контекст проекта
+
+- **Что это:** Next.js приложение (треды, контент по ссылкам, чат по треду с RAG/Ollama). БД SQLite (Prisma), авторизация своя.
+- **Репозиторий:** github.com/bert1306/my_treds. Вся кодовая база в Git.
+- **Деплой:** приложение уже развёрнуто на VPS Beget (Ubuntu 24.04). Доступ по SSH под root.
+  - Сервер: **root@5.35.89.34**
+  - Путь к проекту на сервере: **/root/my_treds**
+  - Сайт: http://5.35.89.34 (Nginx → Next.js на порту 3000, PM2).
+- **SSH с нового ноутбука:** используется ключ `~/.ssh/id_ed25519_beget`. В командах указывать `-i ~/.ssh/id_ed25519_beget` или настроить Host в `~/.ssh/config`.
+- **Деплой изменений:** на сервере выполнять: `cd /root/my_treds && git pull && npm ci && npx prisma migrate deploy && npm run build && pm2 restart my_treds`. Локально перед этим: commit + push.
+- **Локальные данные:** в репо не коммитятся: `.env` (есть `.env.example`), `deploy/CONNECTION.txt` (есть `deploy/CONNECTION.txt.example` с примером SSH и DIR). CONNECTION.txt нужен только если ассистент будет запускать SSH-команды на сервере.
+- Полезные файлы: `deploy/DEPLOY-BEGET.md`, `deploy/NEW-LAPTOP.md`, `README.md`.
