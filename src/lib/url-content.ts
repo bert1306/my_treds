@@ -92,7 +92,7 @@ export async function fetchAndExtractTextWithLinks(url: string): Promise<FetchRe
   $("script, style, nav, footer, aside, [role='navigation']").remove();
   const title = $("title").text().trim() || url;
   const body = $("body").length ? $("body") : $.root();
-  let text = body.text();
+  let text = (body as { text(): string }).text();
   text = text
     .replace(/\s+/g, " ")
     .replace(/\n\s*\n/g, "\n\n")

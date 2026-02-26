@@ -1,0 +1,4 @@
+# Скопируйте в CONNECTION.txt и подставьте свои данные.
+# CONNECTION.txt в .gitignore — не попадёт в репозиторий.
+SSH=root@IP_СЕРВЕРА
+DIR=/root/my_treds

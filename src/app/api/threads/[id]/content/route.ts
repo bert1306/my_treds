@@ -4,9 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { addTextContentToThread } from "@/lib/content";
 
 type RouteParams = {
-  params: {
-    id: string;
-  };
+  params: Promise<{ id: string }>;
 };
 
 const DEFAULT_LIMIT = 5;
@@ -18,9 +16,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { id } = await params;
+
   const thread = await prisma.thread.findFirst({
     where: {
-      id: params.id,
+      id,
       userId: user.id,
     },
   });
@@ -81,9 +81,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Content is empty" }, { status: 400 });
   }
 
+  const { id } = await params;
+
   const thread = await prisma.thread.findFirst({
     where: {
-      id: params.id,
+      id,
       userId: user.id,
       status: {
         not: "DELETED",

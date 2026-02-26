@@ -89,6 +89,10 @@ npm run dev
 - `ThreadMessage` — сообщения в треде (LLM‑чат будет строиться поверх них).
 - `ContentItem` — фрагменты контента (источник: TEXT_INPUT/URL/FILE), с полем `contentHash` и уникальным индексом `@@unique([threadId, contentHash])` для защиты от дублей.
 
+## Деплой на VPS
+
+Подробная инструкция по развёртыванию на **Ubuntu 24.04** (в том числе на [VPS Beget](https://beget.com/ru/vps#vps-plans-list)): **[deploy/DEPLOY-BEGET.md](deploy/DEPLOY-BEGET.md)**. В ней: установка Node.js, Nginx, PM2, настройка переменных окружения, миграции, HTTPS.
+
 ## Дальнейшее развитие
 
 - Добавление контента из файлов (PDF, DOCX).

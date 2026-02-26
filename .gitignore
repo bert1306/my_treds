@@ -34,8 +34,12 @@ yarn-error.log*
 *.db
 dev.db
 
+# deploy: данные сервера (создать из CONNECTION.txt.example на новом месте)
+deploy/CONNECTION.txt
+
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel

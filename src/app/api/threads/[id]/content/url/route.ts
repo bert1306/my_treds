@@ -5,7 +5,7 @@ import { fetchAndExtractText, fetchAndExtractTextWithLinks } from "@/lib/url-con
 import { translateToLanguage } from "@/lib/translate";
 import { addUrlContentToThread } from "@/lib/content";
 
-type RouteParams = { params: { id: string } };
+type RouteParams = { params: Promise<{ id: string }> };
 
 function isValidUrl(s: string): boolean {
   try {
@@ -35,9 +35,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Некорректная ссылка" }, { status: 400 });
   }
 
+  const { id } = await params;
+
   const thread = await prisma.thread.findFirst({
     where: {
-      id: params.id,
+      id,
       userId: user.id,
       status: { not: "DELETED" },
     },
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         );
       }
       const items: Array<{ id: string; title: string; source: string; language: string; createdAt: Date; originalText: string }> = [
-        { id: first.item.id, title: first.item.title, source: first.item.source, language: first.item.language, createdAt: first.item.createdAt, originalText: first.item.originalText },
+        { id: first.item.id, title: first.item.title ?? "", source: first.item.source, language: first.item.language, createdAt: first.item.createdAt, originalText: first.item.originalText },
       ];
       for (const link of nestedLinks) {
         try {
@@ -97,7 +99,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           if (res.created) {
             items.push({
               id: res.item.id,
-              title: res.item.title,
+              title: res.item.title ?? "",
               source: res.item.source,
               language: res.item.language,
               createdAt: res.item.createdAt,

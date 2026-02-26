@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { completeChat } from "@/lib/llm";
 import { getCurrentTimeInTimezone } from "@/lib/datetime";
 
-type RouteParams = { params: { id: string } };
+type RouteParams = { params: Promise<{ id: string }> };
 
 const CONTEXT_MAX_CHARS = 40000;
 const HISTORY_MESSAGES = 20;
@@ -25,8 +25,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Message is empty" }, { status: 400 });
   }
 
+  const { id } = await params;
+
   const thread = await prisma.thread.findFirst({
-    where: { id: params.id, userId: user.id, status: { not: "DELETED" } },
+    where: { id, userId: user.id, status: { not: "DELETED" } },
     include: { contentItems: { orderBy: { createdAt: "desc" }, take: 50 } },
   });
 
