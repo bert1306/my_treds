@@ -111,6 +111,8 @@ ${context || "(пока нет загруженного контента в пр
       hint = " Запустите в терминале: ollama serve, затем ollama run llama3.2 (или установите Ollama с https://ollama.ai).";
     } else if (msg.includes("404") || msg.toLowerCase().includes("model") && msg.toLowerCase().includes("not found")) {
       hint = " Модель не найдена. В терминале выполните: ollama pull llama3.2 (дождитесь загрузки), затем попробуйте снова.";
+    } else if (msg.toLowerCase().includes("memory") || msg.toLowerCase().includes("system memory")) {
+      hint = " Не хватает памяти на сервере. Добавьте swap (см. инструкцию в чате) или в .env укажите модель поменьше: OLLAMA_MODEL=llama3.2:1b.";
     }
     return NextResponse.json(
       { error: "Не удалось получить ответ." + hint },
