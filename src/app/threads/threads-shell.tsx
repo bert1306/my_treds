@@ -293,12 +293,16 @@ export function ThreadsShell() {
       createdAt: new Date().toISOString(),
     };
     setChatMessages((prev) => [...prev, userMsg]);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 180_000);
     try {
       const res = await fetch(`/api/threads/${selectedThreadId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const errText = data.error ?? "Не удалось получить ответ. Запустите Ollama: ollama run llama3.2";
@@ -326,13 +330,18 @@ export function ThreadsShell() {
       ]);
       await loadMessages(selectedThreadId);
       setChatLoading(false);
-    } catch {
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const isTimeout = err instanceof Error && err.name === "AbortError";
+      const msg = isTimeout
+        ? "Запрос отменён по таймауту (3 мин). Ответ Ollama может занимать 1–2 минуты — попробуйте ещё раз и подождите."
+        : "Не удалось получить ответ (сеть или сервер). Подождите 1–2 минуты и попробуйте снова.";
       setChatMessages((prev) => [
         ...prev,
         {
           id: `err-${Date.now()}`,
           role: "ASSISTANT",
-          content: "Не удалось получить ответ. Проверьте подключение к Ollama или попробуйте позже.",
+          content: msg,
           createdAt: new Date().toISOString(),
         },
       ]);

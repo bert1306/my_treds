@@ -206,12 +206,16 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
     setChatInput("");
     const userMsg: ChatMessage = { id: `t-${Date.now()}`, role: "USER", content: text, createdAt: new Date().toISOString() };
     setChatMessages((prev) => [...prev, userMsg]);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 180_000);
     try {
       const res = await fetch(`/api/threads/${threadId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setChatMessages((prev) => [
@@ -227,10 +231,15 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
       ]);
       await loadMessages();
       setChatLoading(false);
-    } catch {
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const isTimeout = err instanceof Error && err.name === "AbortError";
+      const msg = isTimeout
+        ? "Запрос отменён по таймауту (3 мин). Ответ Ollama на сервере может занимать 1–2 минуты — попробуйте ещё раз и подождите."
+        : "Не удалось получить ответ (сеть или сервер). Подождите 1–2 минуты и попробуйте снова — выжимка по большому контенту занимает время.";
       setChatMessages((prev) => [
         ...prev,
-        { id: `e-${Date.now()}`, role: "ASSISTANT", content: "Не удалось получить ответ. Проверьте подключение к Ollama или попробуйте позже.", createdAt: new Date().toISOString() },
+        { id: `e-${Date.now()}`, role: "ASSISTANT", content: msg, createdAt: new Date().toISOString() },
       ]);
       setChatLoading(false);
     }
@@ -370,6 +379,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <p className="max-w-[400px] text-[32px] font-semibold text-[var(--chat-secondary)]">Чем могу помочь?</p>
               <p className="mt-4 text-base text-[var(--chat-text-muted)]">Задайте вопрос — ответ по контенту пространства, с источниками.</p>
+              <p className="mt-1 text-sm text-[var(--chat-text-muted)]/80">Первый ответ может занять 1–2 минуты, не закрывайте страницу.</p>
             </div>
           )}
           <div className="flex flex-col gap-4">
