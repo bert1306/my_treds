@@ -84,11 +84,14 @@ export async function createSession(options: {
     },
   });
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const useSecureCookie = appUrl.startsWith("https://");
+
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: useSecureCookie,
     expires: expiresAt,
   });
 
