@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "my treds",
-  description: "Личный интеллект-помощник с тредами и памятью",
+  title: "my spaces",
+  description: "Личный интеллект-помощник с пространствами и памятью",
 };
 
 export default async function RootLayout({
@@ -36,10 +36,10 @@ export default async function RootLayout({
             <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
               <Link href="/threads" className="flex items-center gap-2">
                 <span className="flex h-8 w-8 items-center justify-center rounded-[16px] bg-mint text-xs font-semibold text-ocean shadow-[0_4px_12px_var(--shadow-mint)]">
-                  mt
+                  ms
                 </span>
                 <span className="text-sm font-semibold text-ocean">
-                  my treds
+                  my spaces
                 </span>
               </Link>
               <div className="flex items-center gap-3">

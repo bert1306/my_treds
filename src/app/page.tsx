@@ -13,10 +13,10 @@ export default async function Home() {
     <div className="grid gap-8 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
       <div className="rounded-2xl border border-zinc-200 bg-white/80 p-8 shadow-sm">
         <h1 className="text-2xl font-semibold text-zinc-900">
-          my treds — спокойное место для твоих тредов и мыслей
+          my spaces — спокойное место для твоих пространств и мыслей
         </h1>
         <p className="mt-3 text-sm text-zinc-600">
-          Сохраняй информацию, структурируй ее в тредах и общайся с помощником,
+          Сохраняй информацию, структурируй её в пространствах и общайся с помощником,
           который подстраивается под твой стиль.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">

@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const nowInTz = getCurrentTimeInTimezone(user.timezone, user.language === "ru" ? "ru" : "en");
   const tzLine = `Часовой пояс пользователя: ${user.timezone}. Текущие дата и время у пользователя (используй только их, не выдумывай): ${nowInTz}. На вопросы «который час», «какое время», «текущая дата» отвечай только по этим данным.`;
   const langRule = user.language === "ru" ? "Только кириллица и латиница, без иероглифов (китайских и т.д.) и слов на других языках." : "Use only Latin/Cyrillic, no ideographic characters.";
-  const systemContent = `Ты помощник пользователя в приложении «my treds». Отвечай на общие вопросы. ${tzLine} Язык ответа: ${user.language === "ru" ? "русский" : "язык пользователя"}. ${langRule} ${styleHint}`;
+  const systemContent = `Ты помощник пользователя в приложении «my spaces». Отвечай на общие вопросы. ${tzLine} Язык ответа: ${user.language === "ru" ? "русский" : "язык пользователя"}. ${langRule} ${styleHint}`;
 
   let reply: string;
   try {

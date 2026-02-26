@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       });
       if (!first.created && first.reason === "duplicate") {
         return NextResponse.json(
-          { ok: false, reason: "duplicate", message: "Контент с этой ссылки уже в треде" },
+          { ok: false, reason: "duplicate", message: "Контент с этой ссылки уже в пространстве" },
           { status: 409 }
         );
       }
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     if (!result.created && result.reason === "duplicate") {
       return NextResponse.json(
-        { ok: false, reason: "duplicate", message: "Контент с этой ссылки уже в треде" },
+        { ok: false, reason: "duplicate", message: "Контент с этой ссылки уже в пространстве" },
         { status: 409 }
       );
     }

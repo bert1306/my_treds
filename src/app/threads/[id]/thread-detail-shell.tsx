@@ -134,7 +134,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setContentError(data.reason === "duplicate" ? "Этот контент уже есть в треде." : data.error ?? "Не удалось сохранить");
+        setContentError(data.reason === "duplicate" ? "Этот контент уже есть в пространстве." : data.error ?? "Не удалось сохранить");
         setSavingContent(false);
         return;
       }
@@ -185,7 +185,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
         return;
       }
       if (data.reason === "duplicate") {
-        setContentError("Контент с этой ссылки уже в треде.");
+        setContentError("Контент с этой ссылки уже в пространстве.");
         setUrlLoading(false);
         return;
       }
@@ -241,9 +241,9 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
           href="/threads"
           className="rounded-[16px] border-2 border-ocean bg-transparent px-4 py-2 text-sm font-medium text-ocean transition hover:bg-ocean/5"
         >
-          ← К тредам
+          ← К пространствам
         </Link>
-        <h1 className="truncate text-[28px] font-semibold text-ocean">{threadTitle || "Тред"}</h1>
+        <h1 className="truncate text-[28px] font-semibold text-ocean">{threadTitle || "Пространство"}</h1>
       </div>
 
       <aside className="flex min-h-0 flex-col rounded-[20px] bg-white p-5 shadow-[0_2px_16px_var(--shadow-card)] lg:h-[calc(100vh-18rem)]">
@@ -264,7 +264,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
             disabled={savingContent}
             className="mt-2 w-full rounded-[16px] bg-mint px-4 py-2 text-sm font-medium text-white shadow-[0_4px_12px_var(--shadow-mint)] transition hover:bg-mint-hover active:bg-mint-active disabled:opacity-50"
           >
-            {savingContent ? "…" : "Сохранить в тред"}
+            {savingContent ? "…" : "Сохранить в пространство"}
           </button>
         </section>
 
@@ -296,7 +296,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
         </section>
 
         <section className="mt-5 min-h-0 flex-1 overflow-hidden flex flex-col border-t border-ocean/10 pt-4">
-          <h3 className="text-sm font-medium text-ocean/80">Контент в треде</h3>
+          <h3 className="text-sm font-medium text-ocean/80">Контент в пространстве</h3>
           {contentError && <p className="mt-1 text-xs text-red-600">{contentError}</p>}
           {contentLoading ? (
             <p className="mt-2 text-sm text-ocean/70">Загружаем…</p>
@@ -356,8 +356,8 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
       </aside>
 
       <section className="flex min-h-0 flex-col overflow-hidden rounded-[20px] bg-[var(--chat-surface)] p-6 shadow-[0_2px_16px_var(--shadow-card)] lg:h-full">
-        <h2 className="text-base font-semibold text-[var(--chat-secondary)]">Чат по треду</h2>
-        <p className="mt-1 text-sm text-[var(--chat-secondary)]/70">Поиск по контенту треда → ответ и источники.</p>
+        <h2 className="text-base font-semibold text-[var(--chat-secondary)]">Чат по пространству</h2>
+        <p className="mt-1 text-sm text-[var(--chat-secondary)]/70">Поиск по контенту пространства → ответ и источники.</p>
         {ollamaStatus === "unavailable" && (
           <div className="mt-3 rounded-[16px] border border-[var(--chat-secondary)]/20 bg-[var(--chat-bg)] px-4 py-3 text-sm text-[var(--chat-secondary)]">
             Ollama не запущена. Запустите: <code className="rounded bg-[var(--chat-secondary)]/10 px-1.5 py-0.5 font-mono text-xs">ollama serve</code>, затем <code className="rounded bg-[var(--chat-secondary)]/10 px-1.5 py-0.5 font-mono text-xs">ollama run llama3.2</code>
@@ -367,7 +367,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
           {chatMessages.length === 0 && !chatLoading && (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <p className="max-w-[400px] text-[32px] font-semibold text-[var(--chat-secondary)]">Чем могу помочь?</p>
-              <p className="mt-4 text-base text-[var(--chat-text-muted)]">Задайте вопрос — ответ по контенту треда, с источниками.</p>
+              <p className="mt-4 text-base text-[var(--chat-text-muted)]">Задайте вопрос — ответ по контенту пространства, с источниками.</p>
             </div>
           )}
           <div className="flex flex-col gap-4">

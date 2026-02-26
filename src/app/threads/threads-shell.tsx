@@ -79,7 +79,7 @@ export function ThreadsShell() {
         method: "GET",
       });
       if (!res.ok) {
-        setError("Не удалось загрузить треды");
+        setError("Не удалось загрузить пространства");
         setThreads([]);
         setLoading(false);
         return;
@@ -94,7 +94,7 @@ export function ThreadsShell() {
       );
       setLoading(false);
     } catch {
-      setError("Произошла ошибка при загрузке тредов");
+      setError("Произошла ошибка при загрузке пространств");
       setLoading(false);
     }
   }
@@ -117,7 +117,7 @@ export function ThreadsShell() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Не удалось создать тред");
+        setError(data.error ?? "Не удалось создать пространство");
         setCreating(false);
         return;
       }
@@ -125,7 +125,7 @@ export function ThreadsShell() {
       await loadThreads(filter);
       setCreating(false);
     } catch {
-      setError("Произошла ошибка при создании треда");
+      setError("Произошла ошибка при создании пространства");
       setCreating(false);
     }
   }
@@ -138,7 +138,7 @@ export function ThreadsShell() {
         method: "GET",
       });
       if (!res.ok) {
-        setContentError("Не удалось загрузить контент треда");
+        setContentError("Не удалось загрузить контент пространства");
         setContentItems([]);
         setContentLoading(false);
         return;
@@ -209,7 +209,7 @@ export function ThreadsShell() {
         const data = await res.json().catch(() => ({}));
         const message: string =
           data.reason === "duplicate"
-            ? "Этот контент уже есть в треде."
+            ? "Этот контент уже есть в пространстве."
             : data.error ?? "Не удалось сохранить контент";
         setContentError(message);
         setSavingContent(false);
@@ -266,7 +266,7 @@ export function ThreadsShell() {
         return;
       }
       if (data.reason === "duplicate") {
-        setContentError("Контент с этой ссылки уже в треде.");
+        setContentError("Контент с этой ссылки уже в пространстве.");
         setUrlLoading(false);
         return;
       }
@@ -385,7 +385,7 @@ export function ThreadsShell() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Не удалось обновить тред");
+        setError(data.error ?? "Не удалось обновить пространство");
         return;
       }
       if (status === "DELETED" && id === selectedThreadId) {
@@ -395,12 +395,12 @@ export function ThreadsShell() {
       }
       await loadThreads(filter);
     } catch {
-      setError("Произошла ошибка при обновлении треда");
+      setError("Произошла ошибка при обновлении пространства");
     }
   }
 
   const emptyTextByFilter: Record<Filter, string> = {
-    active: "Пока нет активных тредов. Создайте первый.",
+    active: "Пока нет активных пространств. Создайте первое.",
     archived: "В архиве пока пусто.",
     deleted: "Корзина пуста.",
   };
@@ -410,7 +410,7 @@ export function ThreadsShell() {
       <section className="rounded-2xl border border-zinc-200 bg-white/80 p-6 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-            Треды
+            Пространства
           </h2>
           <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1 text-xs font-medium text-zinc-700">
             {(["active", "archived", "deleted"] as Filter[]).map((key) => (
@@ -439,7 +439,7 @@ export function ThreadsShell() {
         <div className="mt-4 flex gap-2">
           <input
             type="text"
-            placeholder="Название нового треда"
+            placeholder="Название нового пространства"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
@@ -460,7 +460,7 @@ export function ThreadsShell() {
         )}
         <div className="mt-4 border-t border-zinc-100 pt-4">
           {loading ? (
-            <p className="text-sm text-zinc-600">Загружаем треды…</p>
+            <p className="text-sm text-zinc-600">Загружаем пространства…</p>
           ) : threads.length === 0 ? (
             <p className="text-sm text-zinc-600">{emptyTextByFilter[filter]}</p>
           ) : (
@@ -533,7 +533,7 @@ export function ThreadsShell() {
         {selectedThreadId ? (
           <>
             <p className="font-medium text-zinc-800">
-              Контент выбранного треда
+              Контент выбранного пространства
             </p>
             <div className="mt-3 space-y-3">
               <textarea
@@ -549,7 +549,7 @@ export function ThreadsShell() {
                 disabled={savingContent}
                 className="inline-flex items-center justify-center rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
               >
-                {savingContent ? "Сохраняем..." : "Сохранить в тред"}
+                {savingContent ? "Сохраняем..." : "Сохранить в пространство"}
               </button>
               {contentError && (
                 <p className="text-sm text-red-600">
@@ -603,11 +603,11 @@ export function ThreadsShell() {
               </p>
               {contentLoading ? (
                 <p className="mt-2 text-sm text-zinc-600">
-                  Загружаем содержимое треда…
+                  Загружаем содержимое пространства…
                 </p>
               ) : contentItems.length === 0 ? (
                 <p className="mt-2 text-sm text-zinc-600">
-                  В этом треде пока нет сохраненного текста.
+                  В этом пространстве пока нет сохранённого текста.
                 </p>
               ) : (
                 <ul className="mt-2 space-y-2">
@@ -642,7 +642,7 @@ export function ThreadsShell() {
                         }}
                         disabled={deletingId === item.id}
                         className="shrink-0 rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                        title="Удалить контент из треда"
+                        title="Удалить контент из пространства"
                       >
                         {deletingId === item.id ? "…" : "Удалить"}
                       </button>
@@ -660,7 +660,7 @@ export function ThreadsShell() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Поиск по этому треду или по всем тредам"
+                  placeholder="Поиск по этому пространству или по всем пространствам"
                   className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                 />
                 <button
@@ -722,7 +722,7 @@ export function ThreadsShell() {
                 <p className="mt-1 text-xs text-green-700">Ollama подключена, можно задавать вопросы.</p>
               )}
               <p className="mt-1 text-xs text-zinc-500">
-                Задайте вопрос по контенту треда: выжимка, пересказ, ответ по смыслу.
+                Задайте вопрос по контенту пространства: выжимка, пересказ, ответ по смыслу.
               </p>
               <div className="mt-2 max-h-64 overflow-y-auto space-y-2 rounded-lg border border-zinc-200 bg-zinc-50/50 p-2">
                 {chatMessages.length === 0 && !chatLoading && (
@@ -765,11 +765,11 @@ export function ThreadsShell() {
         ) : (
           <>
             <p className="font-medium text-zinc-800">
-              Выберите тред слева
+              Выберите пространство слева
             </p>
             <p className="mt-2">
-              Здесь будет контент выбранного треда, быстрый поиск и в будущем —
-              локальный чат по этому треду.
+              Здесь будет контент выбранного пространства, быстрый поиск и в будущем —
+              локальный чат по этому пространству.
             </p>
           </>
         )}
@@ -778,9 +778,9 @@ export function ThreadsShell() {
       {threadToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ocean/20 p-4" onClick={() => setThreadToDelete(null)} role="dialog" aria-modal="true" aria-labelledby="delete-thread-title-shell">
           <div className="w-full max-w-md rounded-[20px] border-2 border-ocean/10 bg-white p-6 shadow-[0_2px_16px_rgba(42,91,111,0.08)]" onClick={(e) => e.stopPropagation()}>
-            <h2 id="delete-thread-title-shell" className="text-lg font-semibold text-ocean">Удалить тред?</h2>
+            <h2 id="delete-thread-title-shell" className="text-lg font-semibold text-ocean">Удалить пространство?</h2>
             <p className="mt-2 text-sm text-ocean/80">
-              Тред «{threadToDelete.title}», весь контент и диалог будут безвозвратно удалены. Это действие нельзя отменить.
+              Пространство «{threadToDelete.title}», весь контент и диалог будут безвозвратно удалены. Это действие нельзя отменить.
             </p>
             <p className="mt-1 text-sm font-medium text-ocean/70">Продолжить?</p>
             <div className="mt-6 flex justify-end gap-3">

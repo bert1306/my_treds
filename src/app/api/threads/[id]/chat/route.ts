@@ -80,10 +80,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const nowInTz = getCurrentTimeInTimezone(user.timezone, user.language === "ru" ? "ru" : "en");
   const tzLine = `Часовой пояс пользователя: ${user.timezone}. Текущие дата и время у пользователя (используй только их): ${nowInTz}. На вопросы о текущем времени или дате отвечай только по этим данным.`;
   const langRule = user.language === "ru" ? "Только кириллица и латиница, без иероглифов и слов на других языках." : "Use only Latin/Cyrillic, no ideographic characters.";
-  const systemContent = `Ты помощник пользователя в приложении «my treds». У пользователя выбран тред с сохранённым контентом (статьи, заметки, ссылки). Отвечай на вопросы по этому контенту: делай выжимки, пересказывай, ищи по смыслу, сравнивай. Если в контексте нет подходящего материала — честно скажи об этом. ${tzLine} Язык ответа: ${user.language === "ru" ? "русский" : "user's language"}. ${langRule} ${styleHint}
+  const systemContent = `Ты помощник пользователя в приложении «my spaces». У пользователя выбрано пространство с сохранённым контентом (статьи, заметки, ссылки). Отвечай на вопросы по этому контенту: делай выжимки, пересказывай, ищи по смыслу, сравнивай. Если в контексте нет подходящего материала — честно скажи об этом. ${tzLine} Язык ответа: ${user.language === "ru" ? "русский" : "user's language"}. ${langRule} ${styleHint}
 
-Контекст треда (источники):
-${context || "(пока нет загруженного контента в треде)"}`;
+Контекст пространства (источники):
+${context || "(пока нет загруженного контента в пространстве)"}`;
 
   const history = await prisma.threadMessage.findMany({
     where: { threadId: thread.id },

@@ -67,7 +67,7 @@ export async function fetchAndExtractTextWithLinks(url: string): Promise<FetchRe
     signal: controller.signal,
     headers: {
       "User-Agent":
-        "Mozilla/5.0 (compatible; my_treds/1.0; +https://github.com/my-treds)",
+        "Mozilla/5.0 (compatible; my_spaces/1.0; +https://github.com/bert1306/my_treds)",
     },
   });
   clearTimeout(timeout);

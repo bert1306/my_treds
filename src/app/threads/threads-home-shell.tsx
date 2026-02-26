@@ -80,7 +80,7 @@ export function ThreadsHomeShell() {
       setTotalPages(data.totalPages ?? 1);
       setLoading(false);
     } catch {
-      setError("Не удалось загрузить треды");
+      setError("Не удалось загрузить пространства");
       setLoading(false);
     }
   }
@@ -151,7 +151,7 @@ export function ThreadsHomeShell() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Не удалось создать тред");
+        setError(data.error ?? "Не удалось создать пространство");
         setCreating(false);
         return;
       }
@@ -160,7 +160,7 @@ export function ThreadsHomeShell() {
       await loadThreads(filter, 1);
       setCreating(false);
     } catch {
-      setError("Ошибка при создании треда");
+      setError("Ошибка при создании пространства");
       setCreating(false);
     }
   }
@@ -175,12 +175,12 @@ export function ThreadsHomeShell() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Не удалось обновить тред");
+        setError(data.error ?? "Не удалось обновить пространство");
         return;
       }
       await loadThreads(filter, page);
     } catch {
-      setError("Ошибка при обновлении треда");
+      setError("Ошибка при обновлении пространства");
     }
   }
 
@@ -220,7 +220,7 @@ export function ThreadsHomeShell() {
   }
 
   const emptyTextByFilter: Record<Filter, string> = {
-    active: "Пока нет активных тредов. Создайте первый.",
+    active: "Пока нет активных пространств. Создайте первое.",
     archived: "В архиве пусто.",
     deleted: "Корзина пуста.",
   };
@@ -229,12 +229,12 @@ export function ThreadsHomeShell() {
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-stretch">
       <section className="flex min-h-0 flex-col rounded-[20px] bg-white p-6 shadow-[0_2px_16px_var(--shadow-card)]">
         <h2 className="text-base font-semibold text-ocean">
-          Треды
+          Пространства
         </h2>
         <div className="mt-5 flex gap-2">
           <input
             type="text"
-            placeholder="Название нового треда"
+            placeholder="Название нового пространства"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             className="min-w-0 flex-1 rounded-[12px] border-2 border-transparent bg-ivory px-4 py-2.5 text-base text-ocean placeholder:text-ocean/50 outline-none transition focus:border-mint focus:bg-white focus:ring-2 focus:ring-mint/30"
@@ -266,7 +266,7 @@ export function ThreadsHomeShell() {
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
         <div className="mt-5 flex min-h-0 flex-1 flex-col border-t border-ocean/10 pt-5">
           {loading ? (
-            <p className="text-base text-ocean/70">Загружаем треды…</p>
+            <p className="text-base text-ocean/70">Загружаем пространства…</p>
           ) : threads.length === 0 ? (
             <p className="text-base text-ocean/70">{emptyTextByFilter[filter]}</p>
           ) : (
@@ -366,7 +366,7 @@ export function ThreadsHomeShell() {
         )}
         <div className="mt-4 min-h-0 flex-1 overflow-y-auto space-y-3 rounded-[12px] bg-ivory p-4">
           {chatMessages.length === 0 && !chatLoading && (
-            <p className="text-base text-ocean/70">Задайте вопрос — ответ будет по контенту ваших тредов, с источниками.</p>
+            <p className="text-base text-ocean/70">Задайте вопрос — ответ будет по контенту ваших пространств, с источниками.</p>
           )}
           {chatMessages.map((m) => (
             <div
@@ -384,7 +384,7 @@ export function ThreadsHomeShell() {
                 return (
                   <div className="mt-3 space-y-2 border-t border-ocean/10 pt-3">
                     <div>
-                      <p className="mb-1 text-xs font-medium text-ocean/60">Найденные треды</p>
+                      <p className="mb-1 text-xs font-medium text-ocean/60">Найденные пространства</p>
                       <ul className="space-y-0.5 text-xs">
                         {threadList.map(([tid, { threadTitle }]) => (
                           <li key={tid}>
@@ -411,14 +411,14 @@ export function ThreadsHomeShell() {
               })()}
             </div>
           ))}
-          {chatLoading && <p className="py-1 text-base text-ocean/70">Ищем по тредам и готовим ответ…</p>}
+          {chatLoading && <p className="py-1 text-base text-ocean/70">Ищем по пространствам и готовим ответ…</p>}
         </div>
         <form onSubmit={handleRagChat} className="mt-4 flex gap-2">
           <input
             type="text"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            placeholder="Вопрос или запрос по вашим тредам…"
+            placeholder="Вопрос или запрос по вашим пространствам…"
             className="min-w-0 flex-1 rounded-[12px] border-2 border-transparent bg-ivory px-4 py-2.5 text-base text-ocean placeholder:text-ocean/50 outline-none transition focus:border-mint focus:bg-white focus:ring-2 focus:ring-mint/30"
           />
           <button
@@ -434,9 +434,9 @@ export function ThreadsHomeShell() {
       {threadToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ocean/20 p-4" onClick={() => setThreadToDelete(null)} role="dialog" aria-modal="true" aria-labelledby="delete-thread-title">
           <div className="w-full max-w-md rounded-[20px] border-2 border-ocean/10 bg-white p-6 shadow-[0_2px_16px_var(--shadow-card)]" onClick={(e) => e.stopPropagation()}>
-            <h2 id="delete-thread-title" className="text-lg font-semibold text-ocean">Удалить тред?</h2>
+            <h2 id="delete-thread-title" className="text-lg font-semibold text-ocean">Удалить пространство?</h2>
             <p className="mt-2 text-sm text-ocean/80">
-              Тред «{threadToDelete.title}», весь контент и диалог будут безвозвратно удалены. Это действие нельзя отменить.
+              Пространство «{threadToDelete.title}», весь контент и диалог будут безвозвратно удалены. Это действие нельзя отменить.
             </p>
             <p className="mt-1 text-sm font-medium text-ocean/70">Продолжить?</p>
             <div className="mt-6 flex justify-end gap-3">

@@ -15,7 +15,7 @@ export default async function ProfilePage() {
           href="/threads"
           className="rounded-[16px] border-2 border-ocean bg-transparent px-4 py-2 text-sm font-medium text-ocean transition hover:bg-ocean/5"
         >
-          ← К тредам
+          ← К пространствам
         </Link>
         <h1 className="text-[28px] font-semibold text-ocean">Профиль</h1>
       </div>

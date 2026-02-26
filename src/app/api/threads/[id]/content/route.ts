@@ -109,7 +109,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       {
         ok: false,
         reason: "duplicate",
-        message: "Этот фрагмент уже есть в треде",
+        message: "Этот фрагмент уже есть в пространстве",
       },
       { status: 409 },
     );
