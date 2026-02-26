@@ -228,8 +228,10 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
       await loadMessages();
       setChatLoading(false);
     } catch {
-      setChatMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
-      setContentError("Ошибка при отправке");
+      setChatMessages((prev) => [
+        ...prev,
+        { id: `e-${Date.now()}`, role: "ASSISTANT", content: "Не удалось получить ответ. Проверьте подключение к Ollama или попробуйте позже.", createdAt: new Date().toISOString() },
+      ]);
       setChatLoading(false);
     }
   }

@@ -302,7 +302,6 @@ export function ThreadsShell() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const errText = data.error ?? "Не удалось получить ответ. Запустите Ollama: ollama run llama3.2";
-        setContentError(errText);
         setChatMessages((prev) => [
           ...prev,
           {
@@ -328,8 +327,15 @@ export function ThreadsShell() {
       await loadMessages(selectedThreadId);
       setChatLoading(false);
     } catch {
-      setChatMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
-      setContentError("Ошибка при отправке сообщения");
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `err-${Date.now()}`,
+          role: "ASSISTANT",
+          content: "Не удалось получить ответ. Проверьте подключение к Ollama или попробуйте позже.",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
       setChatLoading(false);
     }
   }
