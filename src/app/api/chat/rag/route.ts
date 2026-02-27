@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       : "Отвечай строго и по делу, без лишних слов.";
   const langRule =
     user.language === "ru"
-      ? "Весь ответ пиши по-русски. В оригинале оставляй только термины и названия (документов, организаций). Обычные слова — только по-русски. Без иероглифов и вкраплений английского/других языков вместо русских слов."
+      ? "КРИТИЧНО: весь ответ только по-русски. Латинскими только: названия организаций, аббревиатуры (AML, KYC, CFT), термины. Глаголы и связки — по-русски. Запрещено: Exist/need a/must have/Additionally/It's worth noting и любые английские фразы вместо русских. Без иероглифов."
       : "Answer in the user's language only. Use only Latin/Cyrillic script. Do not use ideographic characters (Chinese, Japanese, etc.) or words in other languages.";
 
   const hasContext = context && !context.startsWith("(по запросу");
