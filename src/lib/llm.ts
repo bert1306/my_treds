@@ -20,7 +20,7 @@ export async function completeChat(messages: LLMMessage[]): Promise<string> {
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       stream: false,
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(600_000), // 10 мин — выжимка по большому контенту может долго идти (особенно с swap)
   });
 
   if (!res.ok) {

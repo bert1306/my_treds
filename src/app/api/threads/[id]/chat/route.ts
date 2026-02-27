@@ -185,7 +185,7 @@ ${context || "(пока нет загруженного контента в пр
   const timeoutHandle = setTimeout(() => {
     const job = getJob(jobId);
     if (job?.status === "running") {
-      setJobError(jobId, "Задание не выполнено по таймауту (5 мин). Попробуйте короче запрос или повторите позже.");
+      setJobError(jobId, "Задание не выполнено по таймауту (12 мин). Попробуйте короче запрос или повторите позже.");
     }
   }, BACKGROUND_JOB_TIMEOUT_MS);
 

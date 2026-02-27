@@ -7,7 +7,7 @@ const BACKGROUND_AFTER_MS = 30_000;
 const MAX_BACKGROUND_JOBS = parseInt(process.env.CHAT_BACKGROUND_JOBS_MAX ?? "2", 10) || 2;
 const JOB_TTL_MS = 60 * 60 * 1000; // 1 час, потом удаляем
 /** Таймаут фонового задания: если не завершилось — помечаем ошибкой */
-export const BACKGROUND_JOB_TIMEOUT_MS = 5 * 60 * 1000; // 5 мин
+export const BACKGROUND_JOB_TIMEOUT_MS = 12 * 60 * 1000; // 12 мин (Ollama до 10 мин + запас)
 
 export type ChatJobStatus = "running" | "done" | "error";
 
