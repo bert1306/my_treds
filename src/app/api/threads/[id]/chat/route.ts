@@ -455,9 +455,13 @@ ${context || "(пока нет загруженного контента в пр
     .catch((err) => {
       clearTimeout(timeoutHandle);
       const msg = err instanceof Error ? err.message : String(err);
+      const model = process.env.OLLAMA_MODEL ?? "llama3.2";
       let errText = "Фоновое задание не выполнено.";
-      if (msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("econnrefused")) {
-        errText += " Ollama недоступна. Запустите ollama serve и ollama run llama3.2.";
+      if (msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("econnrefused") || msg.toLowerCase().includes("unavailable")) {
+        const onServer = process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost");
+        errText += onServer
+          ? ` Ollama на сервере недоступна. На сервере выполните: ollama serve, затем ollama run ${model}.`
+          : ` Ollama недоступна. Запустите: ollama serve и ollama run ${model}.`;
       } else if (msg.toLowerCase().includes("memory") || msg.toLowerCase().includes("system memory")) {
         errText += " Не хватает памяти на сервере. Используйте OLLAMA_MODEL=llama3.2:1b или добавьте swap.";
       } else if (msg.includes("timeout") || msg.includes("abort")) {
