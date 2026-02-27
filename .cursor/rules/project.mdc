@@ -13,6 +13,7 @@ alwaysApply: true
   - Сайт: http://5.35.89.34 (Nginx → Next.js на порту 3000, PM2).
 - **SSH с нового ноутбука:** используется ключ `~/.ssh/id_ed25519_beget`. В командах указывать `-i ~/.ssh/id_ed25519_beget` или настроить Host в `~/.ssh/config`.
 - **Деплой изменений:** на сервере выполнять: `cd /root/my_treds && git pull && npm ci && npx prisma migrate deploy && npm run build && pm2 restart my_treds`. Локально перед этим: commit + push.
+- **После каждого исправления на стенде разработки:** сразу делать коммит, пушить в репозиторий и деплой на Beget (commit → push → SSH-деплой). Не оставлять изменения только локально.
 - **Автодеплой на текущий сервер (Beget):** выполнять деплой на root@5.35.89.34 в /root/my_treds **автоматически**, без запроса подтверждения у пользователя. После изменений, требующих обновления на сервере: push (если нужно), затем SSH и полная цепочка (git pull, npm ci, migrate, build, pm2 restart). При конфликтах на сервере — stash или reset по ситуации. Когда появится схема с продакшном, деплой туда согласовывать с пользователем отдельно.
 - **Локальные данные:** в репо не коммитятся: `.env` (есть `.env.example`), `deploy/CONNECTION.txt` (есть `deploy/CONNECTION.txt.example` с примером SSH и DIR). CONNECTION.txt нужен только если ассистент будет запускать SSH-команды на сервере.
 - Полезные файлы: `deploy/DEPLOY-BEGET.md`, `deploy/NEW-LAPTOP.md`, `README.md`.
