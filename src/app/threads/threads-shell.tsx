@@ -453,7 +453,7 @@ export function ThreadsShell() {
           createdAt: new Date().toISOString(),
         },
       ]);
-      await loadMessages(selectedThreadId);
+      // Не вызываем loadMessages() — иначе затираются фоновые задания, которые ещё не в БД
       setChatLoading(false);
     } catch (err) {
       clearTimeout(timeoutId);

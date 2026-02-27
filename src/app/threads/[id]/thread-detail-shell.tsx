@@ -377,7 +377,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
         ...prev,
         { id: `a-${Date.now()}`, role: "ASSISTANT", content: data.reply ?? data.message ?? "", createdAt: new Date().toISOString(), sources: data.sources ?? [] },
       ]);
-      await loadMessages();
+      // Не вызываем loadMessages() — иначе затираются фоновые задания, которые ещё не в БД
       setChatLoading(false);
     } catch (err) {
       clearTimeout(timeoutId);
