@@ -34,6 +34,7 @@ type ChatMessage = {
   content: string;
   createdAt: string;
   jobId?: string;
+  needConfirmationJobId?: string;
 };
 
 type Filter = "active" | "archived" | "deleted";
@@ -379,7 +380,13 @@ export function ThreadsShell() {
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      const data = (await res.json()) as { jobId?: string; reply?: string; message?: string; error?: string };
+      const data = (await res.json()) as {
+        jobId?: string;
+        reply?: string;
+        message?: string;
+        error?: string;
+        needConfirmation?: boolean;
+      };
       if (res.status === 202 && data.jobId) {
         setChatMessages((prev) => [
           ...prev,
@@ -389,6 +396,20 @@ export function ThreadsShell() {
             content: "Обрабатывается в фоне… Результат появится здесь.",
             createdAt: new Date().toISOString(),
             jobId: data.jobId,
+          },
+        ]);
+        setChatLoading(false);
+        return;
+      }
+      if (res.status === 200 && data.needConfirmation && data.jobId) {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `confirm-${data.jobId}`,
+            role: "ASSISTANT",
+            content: data.message ?? data.reply ?? "",
+            createdAt: new Date().toISOString(),
+            needConfirmationJobId: data.jobId,
           },
         ]);
         setChatLoading(false);
@@ -437,6 +458,21 @@ export function ThreadsShell() {
       ]);
       setChatLoading(false);
     }
+  }
+
+  function confirmBackgroundJob(jobId: string) {
+    setChatMessages((prev) =>
+      prev.map((m) =>
+        m.needConfirmationJobId === jobId
+          ? {
+              ...m,
+              content: "Обрабатывается в фоне… Результат появится здесь.",
+              jobId,
+              needConfirmationJobId: undefined,
+            }
+          : m
+      )
+    );
   }
 
   async function handleSendChat(e: React.FormEvent) {
@@ -868,6 +904,17 @@ export function ThreadsShell() {
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{m.content}</p>
+                    {m.role === "ASSISTANT" && m.needConfirmationJobId && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => confirmBackgroundJob(m.needConfirmationJobId!)}
+                          className="rounded border border-zinc-400 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                        >
+                          Да, подставить в чат
+                        </button>
+                      </div>
+                    )}
                     {m.role === "ASSISTANT" && m.jobId && (
                       <p className="mt-1 text-xs text-zinc-500">Статус: выполняется…</p>
                     )}

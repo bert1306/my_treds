@@ -3,7 +3,8 @@
  * Долгие запросы (>30s) возвращают 202 и продолжают выполняться в фоне.
  */
 
-const BACKGROUND_AFTER_MS = 30_000;
+/** Таймаут основной LLM (с), после которого спрашиваем подтверждение на переход в фон. Настраивается через CHAT_MAIN_LLM_TIMEOUT_MS */
+const BACKGROUND_AFTER_MS = Math.max(5000, parseInt(process.env.CHAT_MAIN_LLM_TIMEOUT_MS ?? "30000", 10) || 30_000);
 const MAX_BACKGROUND_JOBS = parseInt(process.env.CHAT_BACKGROUND_JOBS_MAX ?? "2", 10) || 2;
 const JOB_TTL_MS = 60 * 60 * 1000; // 1 час, потом удаляем
 /** Таймаут фонового задания: если не завершилось — помечаем ошибкой */

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { completeChat } from "@/lib/llm";
+import { completeChat, completeChatLight } from "@/lib/llm";
 import { getCurrentTimeInTimezone } from "@/lib/datetime";
 import {
   getBackgroundAfterMs,
@@ -187,6 +187,34 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
   }
 
+  // Опционально: лёгкая LLM до основной — быстрый ответ без контекста (приветствия, простые вопросы)
+  const lightLlmEnabled = process.env.LIGHT_LLM_ENABLED === "true";
+  if (lightLlmEnabled) {
+    try {
+      const lightSystem =
+        user.language === "ru"
+          ? "Ты помощник. Отвечай одним коротким предложением только на: приветствие, как тебя зовут, кто ты, что умеешь, время/дата. На всё остальное ответь ровно: CANNOT_ANSWER"
+          : "You are an assistant. Answer in one short sentence only for: greeting, your name, who you are, what you can do, time/date. For anything else reply exactly: CANNOT_ANSWER";
+      const lightReply = await completeChatLight(
+        [{ role: "system", content: lightSystem }, { role: "user", content: userMessage }],
+        12_000
+      );
+      const trimmed = lightReply.trim();
+      const isCannot = /cannot_answer|can't answer|не могу|нет подходящ/i.test(trimmed) || trimmed.length > 400;
+      if (trimmed.length > 0 && !isCannot) {
+        await prisma.threadMessage.createMany({
+          data: [
+            { threadId: thread.id, role: "USER", content: userMessage },
+            { threadId: thread.id, role: "ASSISTANT", content: trimmed },
+          ],
+        });
+        return NextResponse.json({ reply: trimmed, message: trimmed, sources: [] }, { status: 200 });
+      }
+    } catch {
+      // лёгкая LLM не ответила или таймаут — идём в основную
+    }
+  }
+
   const searchItems = await prisma.contentItem.findMany({
     where: {
       threadId: thread.id,
@@ -344,21 +372,32 @@ ${context || "(пока нет загруженного контента в пр
     .catch((err) => {
       clearTimeout(timeoutHandle);
       const msg = err instanceof Error ? err.message : String(err);
-      let userMessage = "Фоновое задание не выполнено.";
+      let errText = "Фоновое задание не выполнено.";
       if (msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("econnrefused")) {
-        userMessage += " Ollama недоступна. Запустите ollama serve и ollama run llama3.2.";
+        errText += " Ollama недоступна. Запустите ollama serve и ollama run llama3.2.";
       } else if (msg.toLowerCase().includes("memory") || msg.toLowerCase().includes("system memory")) {
-        userMessage += " Не хватает памяти на сервере. Используйте OLLAMA_MODEL=llama3.2:1b или добавьте swap.";
+        errText += " Не хватает памяти на сервере. Используйте OLLAMA_MODEL=llama3.2:1b или добавьте swap.";
       } else if (msg.includes("timeout") || msg.includes("abort")) {
-        userMessage += " Превышено время ожидания ответа Ollama. Попробуйте позже.";
+        errText += " Превышено время ожидания ответа Ollama. Попробуйте позже.";
       } else if (msg.length < 200) {
-        userMessage += ` ${msg}`;
+        errText += ` ${msg}`;
       }
-      setJobError(jobId, userMessage);
+      setJobError(jobId, errText);
     });
 
+  const timeoutSec = Math.round(timeoutMs / 1000);
+  const confirmMessageRu = `Ответ занимает больше ${timeoutSec} с. Результат подставится в чат по готовности. Продолжить?`;
+  const confirmMessageEn = `Response is taking longer than ${timeoutSec} s. The result will appear in the chat when ready. Continue?`;
+  const confirmMessage = user.language === "ru" ? confirmMessageRu : confirmMessageEn;
+
   return NextResponse.json(
-    { jobId, status: "processing", message: "Запрос обрабатывается в фоне. Результат появится в чате." },
-    { status: 202 }
+    {
+      reply: confirmMessage,
+      message: confirmMessage,
+      needConfirmation: true,
+      jobId,
+      sources: [],
+    },
+    { status: 200 }
   );
 }

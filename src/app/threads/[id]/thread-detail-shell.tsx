@@ -26,6 +26,8 @@ type ChatMessage = {
   sources?: RagSource[];
   /** Фоновый запрос: пока выполняется, в чате показывается placeholder */
   jobId?: string;
+  /** Запрос подтверждения перехода в фон: jobId уже есть, показываем кнопку «Продолжить» */
+  needConfirmationJobId?: string;
 };
 
 export function ThreadDetailShell({ threadId }: { threadId: string }) {
@@ -310,6 +312,20 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
         setChatLoading(false);
         return;
       }
+      if (res.status === 200 && data.needConfirmation && data.jobId) {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `confirm-${data.jobId}`,
+            role: "ASSISTANT",
+            content: data.message ?? data.reply ?? "",
+            createdAt: new Date().toISOString(),
+            needConfirmationJobId: data.jobId,
+          },
+        ]);
+        setChatLoading(false);
+        return;
+      }
       if (!res.ok) {
         setChatMessages((prev) => [
           ...prev,
@@ -336,6 +352,21 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
       ]);
       setChatLoading(false);
     }
+  }
+
+  function confirmBackgroundJob(jobId: string) {
+    setChatMessages((prev) =>
+      prev.map((m) =>
+        m.needConfirmationJobId === jobId
+          ? {
+              ...m,
+              content: "Обрабатывается в фоне… Результат появится здесь.",
+              jobId,
+              needConfirmationJobId: undefined,
+            }
+          : m
+      )
+    );
   }
 
   async function handleSendChat(e: React.FormEvent) {
@@ -522,6 +553,17 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
                       className={`chat-bubble-appear rounded-[var(--chat-radius-lg)] px-5 py-4 text-base leading-relaxed shadow-[var(--chat-shadow-bubble)] ${isUser ? "bg-[var(--chat-primary)] text-white" : "bg-[var(--chat-surface)] text-[var(--chat-secondary)]"}`}
                     >
                       <p className="whitespace-pre-wrap">{m.content}</p>
+                      {!isUser && m.needConfirmationJobId && (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={() => confirmBackgroundJob(m.needConfirmationJobId!)}
+                            className="rounded-[12px] border-2 border-[var(--chat-primary)] bg-transparent px-4 py-2 text-sm font-medium text-[var(--chat-primary)] transition hover:bg-[var(--chat-primary)]/10"
+                          >
+                            Да, подставить в чат
+                          </button>
+                        </div>
+                      )}
                       {!isUser && m.jobId && (
                         <p className="mt-2 text-xs text-[var(--chat-secondary)]/70">Статус: выполняется…</p>
                       )}
