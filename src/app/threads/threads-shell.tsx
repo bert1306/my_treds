@@ -239,7 +239,7 @@ export function ThreadsShell() {
                   : m
               )
             );
-            void loadMessages(tid);
+            // Не вызываем loadMessages() — перезапись с сервера убирает другие фоновые сообщения
           } else if (data.status === "error") {
             setChatMessages((prev) =>
               prev.map((m) =>
@@ -497,6 +497,12 @@ export function ThreadsShell() {
     setChatInput("");
     await sendMessage(text);
   }
+
+  const pendingBackgroundTasks = chatMessages.flatMap((m, i) => {
+    if (!m.jobId && !m.needConfirmationJobId) return [];
+    const userText = i > 0 && chatMessages[i - 1].role === "USER" ? chatMessages[i - 1].content : "";
+    return [{ id: m.jobId ?? m.needConfirmationJobId!, text: userText || "…" }];
+  });
 
   const lastMsg = chatMessages[chatMessages.length - 1];
   const isLastClarification = lastMsg?.role === "ASSISTANT" && lastMsg.content.includes(CLARIFICATION_MARKER);
@@ -883,9 +889,24 @@ export function ThreadsShell() {
                   Чат с помощником
                 </p>
                 {backgroundRunningCount > 0 && (
-                  <span className="shrink-0 rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-700" title="Фоновых заданий">
-                    В фоне: {backgroundRunningCount}
-                  </span>
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    <span
+                      className="rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-700"
+                      title={pendingBackgroundTasks.length > 0 ? pendingBackgroundTasks.map((t) => t.text.slice(0, 80)).join("\n") : "Фоновых заданий"}
+                    >
+                      В фоне: {backgroundRunningCount}
+                    </span>
+                    {pendingBackgroundTasks.length > 0 && (
+                      <div className="max-w-[260px] rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-[11px] text-zinc-700 shadow-sm">
+                        <p className="font-medium text-zinc-600">Обрабатывается:</p>
+                        {pendingBackgroundTasks.map((t, idx) => (
+                          <p key={t.id} className="mt-0.5 truncate" title={t.text}>
+                            {idx + 1}. «{t.text.length > 45 ? `${t.text.slice(0, 45)}…` : t.text}»
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
               {ollamaStatus === "checking" && (
@@ -908,7 +929,11 @@ export function ThreadsShell() {
                 {chatMessages.length === 0 && !chatLoading && (
                   <p className="text-xs text-zinc-500">Пока нет сообщений. Напишите вопрос или «сделай выжимку из этого источника».</p>
                 )}
-                {chatMessages.map((m) => (
+                {chatMessages.map((m, msgIndex) => {
+                  const requestText = m.role === "ASSISTANT" && msgIndex > 0 && chatMessages[msgIndex - 1].role === "USER"
+                    ? chatMessages[msgIndex - 1].content
+                    : null;
+                  return (
                   <div
                     key={m.id}
                     className={`rounded-lg px-3 py-2 text-sm ${
@@ -918,6 +943,9 @@ export function ThreadsShell() {
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{m.content}</p>
+                    {m.role === "ASSISTANT" && requestText && (m.jobId || m.needConfirmationJobId) && (
+                      <p className="mt-1 text-xs text-zinc-500">Запрос: «{requestText.length > 50 ? `${requestText.slice(0, 50)}…` : requestText}»</p>
+                    )}
                     {m.role === "ASSISTANT" && m.needConfirmationJobId && (
                       <>
                         <p className="mt-1 text-xs font-medium text-zinc-600">
@@ -938,7 +966,7 @@ export function ThreadsShell() {
                       <p className="mt-1 text-xs font-medium text-zinc-600">Статус: выполняется в фоне…</p>
                     )}
                   </div>
-                ))}
+                ); })}
                 {isLastClarification && !chatLoading && (
                   <div className="mr-4 flex flex-wrap gap-2">
                     <button

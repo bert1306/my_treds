@@ -200,7 +200,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
                   : m
               )
             );
-            void loadMessages();
+            // Не вызываем loadMessages() — он перезаписывает чат с сервера и убирает другие фоновые сообщения
           } else if (data.status === "error") {
             setChatMessages((prev) =>
               prev.map((m) =>
@@ -416,6 +416,12 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
     await sendMessage(text);
   }
 
+  const pendingBackgroundTasks = chatMessages.flatMap((m, i) => {
+    if (!m.jobId && !m.needConfirmationJobId) return [];
+    const userText = i > 0 && chatMessages[i - 1].role === "USER" ? chatMessages[i - 1].content : "";
+    return [{ id: m.jobId ?? m.needConfirmationJobId!, text: userText || "…" }];
+  });
+
   const lastMsg = chatMessages[chatMessages.length - 1];
   const isLastClarification = lastMsg?.role === "ASSISTANT" && lastMsg.content.includes(CLARIFICATION_MARKER);
   const clarificationTriggerMessage = (() => {
@@ -573,9 +579,24 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
             <p className="mt-1 text-sm text-[var(--chat-secondary)]/70">Поиск по контенту пространства → ответ и источники.</p>
           </div>
           {backgroundRunningCount > 0 && (
-            <span className="shrink-0 rounded-full bg-[var(--chat-secondary)]/15 px-3 py-1 text-xs font-medium text-[var(--chat-secondary)]" title="Фоновых заданий">
-              В фоне: {backgroundRunningCount}
-            </span>
+            <div className="shrink-0 flex flex-col items-end gap-1">
+              <span
+                className="rounded-full bg-[var(--chat-secondary)]/15 px-3 py-1 text-xs font-medium text-[var(--chat-secondary)]"
+                title={pendingBackgroundTasks.length > 0 ? pendingBackgroundTasks.map((t) => t.text.slice(0, 80)).join("\n") : "Фоновых заданий"}
+              >
+                В фоне: {backgroundRunningCount}
+              </span>
+              {pendingBackgroundTasks.length > 0 && (
+                <div className="max-w-[280px] rounded-[10px] border border-[var(--chat-secondary)]/20 bg-[var(--chat-bg)] px-2 py-1.5 text-[11px] text-[var(--chat-secondary)]/90 shadow-sm">
+                  <p className="font-medium text-[var(--chat-secondary)]/80">Обрабатывается:</p>
+                  {pendingBackgroundTasks.map((t, idx) => (
+                    <p key={t.id} className="mt-0.5 truncate" title={t.text}>
+                      {idx + 1}. «{t.text.length > 50 ? `${t.text.slice(0, 50)}…` : t.text}»
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
         {ollamaStatus === "unavailable" && (
@@ -592,9 +613,12 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
             </div>
           )}
           <div className="flex flex-col gap-4">
-            {chatMessages.map((m) => {
+            {chatMessages.map((m, msgIndex) => {
               const isUser = m.role === "USER";
               const time = new Date(m.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+              const requestText = !isUser && msgIndex > 0 && chatMessages[msgIndex - 1].role === "USER"
+                ? chatMessages[msgIndex - 1].content
+                : null;
               return (
                 <div
                   key={m.id}
@@ -611,6 +635,11 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
                       className={`chat-bubble-appear rounded-[var(--chat-radius-lg)] px-5 py-4 text-base leading-relaxed shadow-[var(--chat-shadow-bubble)] ${isUser ? "bg-[var(--chat-primary)] text-white" : "bg-[var(--chat-surface)] text-[var(--chat-secondary)]"}`}
                     >
                       <p className="whitespace-pre-wrap">{m.content}</p>
+                      {!isUser && requestText && (m.jobId || m.needConfirmationJobId) && (
+                        <p className="mt-1.5 text-xs text-[var(--chat-secondary)]/70">
+                          Запрос: «{requestText.length > 60 ? `${requestText.slice(0, 60)}…` : requestText}»
+                        </p>
+                      )}
                       {!isUser && m.needConfirmationJobId && (
                         <>
                           <p className="mt-2 text-xs font-medium text-[var(--chat-secondary)]/80">
