@@ -22,6 +22,55 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Вопросы о времени/дате — отвечаем сразу без контекста пространства и без вызова LLM */
+function isSimpleTimeDateQuestion(text: string): boolean {
+  const t = text.toLowerCase().replace(/\s+/g, " ").trim();
+  const timeDatePatterns = [
+    /сколько\s+(сейчас\s+)?(времени|время)/,
+    /который\s+час/,
+    /какое\s+(сейчас\s+)?время/,
+    /текущ(ее|ая)\s+(дата|время)/,
+    /какая\s+(сейчас\s+)?дата/,
+    /сегодняшн(яя|я)\s+дата/,
+    /what\s+time|current\s+time|what\'?s\s+the\s+time/,
+  ];
+  return timeDatePatterns.some((p) => p.test(t)) || /^(время|дата|который час)\s*\?*$/i.test(t);
+}
+
+/** Неоднозначный запрос: короткий или без явного намерения — перед глубоким поиском уточняем */
+function isAmbiguousQuestion(text: string): boolean {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t.length >= 35) return false; // развёрнутый вопрос — идём в поиск
+  const lower = t.toLowerCase();
+  const clearIntents = [
+    "сделай выжимку",
+    "выжимку",
+    "выжимка",
+    "кратко",
+    "суть",
+    "перескажи",
+    "найди",
+    "расскажи",
+    "опиши",
+    "сравни",
+    "что сказано",
+    "что в контенте",
+    "что говорится",
+    "как получить",
+    "где указано",
+    "зачем",
+  ];
+  const looksClear = clearIntents.some((phrase) => lower.startsWith(phrase) || lower === phrase);
+  if (looksClear) return false;
+  const words = t.split(/\s+/).length;
+  return words <= 2 || t.length < 25;
+}
+
+const CLARIFICATION_REPLY_RU =
+  "Уточните, пожалуйста: вам нужна выжимка по контенту пространства, поиск по теме или ответ на конкретный вопрос? Например: «сделай выжимку» или «что сказано про …».";
+const CLARIFICATION_REPLY_EN =
+  "Please clarify: do you need a summary of the space content, search by topic, or an answer to a specific question? For example: «make an excerpt» or «what does it say about…».";
+
 export async function POST(req: NextRequest, { params }: RouteParams) {
   const user = await getCurrentUser();
   if (!user) {
@@ -47,6 +96,34 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   if (!thread) {
     return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+  }
+
+  // Простые вопросы (время/дата) — ответ сразу, без контекста и без LLM
+  if (isSimpleTimeDateQuestion(userMessage)) {
+    const nowInTz = getCurrentTimeInTimezone(user.timezone, user.language === "ru" ? "ru" : "en");
+    const reply =
+      user.language === "ru"
+        ? `Сейчас у вас: ${nowInTz}.`
+        : `Current time for you: ${nowInTz}.`;
+    await prisma.threadMessage.createMany({
+      data: [
+        { threadId: thread.id, role: "USER", content: userMessage },
+        { threadId: thread.id, role: "ASSISTANT", content: reply },
+      ],
+    });
+    return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
+  }
+
+  // Неоднозначный вопрос — уточняем, без глубокого поиска и без вызова LLM
+  if (isAmbiguousQuestion(userMessage)) {
+    const reply = user.language === "ru" ? CLARIFICATION_REPLY_RU : CLARIFICATION_REPLY_EN;
+    await prisma.threadMessage.createMany({
+      data: [
+        { threadId: thread.id, role: "USER", content: userMessage },
+        { threadId: thread.id, role: "ASSISTANT", content: reply },
+      ],
+    });
+    return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
   }
 
   const searchItems = await prisma.contentItem.findMany({
