@@ -58,6 +58,21 @@ const META_REPLY_RU =
 const META_REPLY_EN =
   "I'm the assistant in «my spaces». I answer questions about your space content (summaries, search) and general questions. Try «make an excerpt» or ask anything.";
 
+/** Запрос напоминания / будильника — в приложении не реализовано, отвечаем сразу */
+function isReminderRequest(text: string): boolean {
+  const t = text.toLowerCase().replace(/\s+/g, " ").trim();
+  return (
+    /\bнапоминание\b|\bнапомни\b|\breminder\b|\bнапомни\s+мне\b|\bнапомнить\b/.test(t) ||
+    /\bчерез\s+\d+\s*(минут|час|часа|часов)\b.*позвонить\b/.test(t) ||
+    /\bпозвонить\s+через\b/.test(t)
+  );
+}
+
+const REMINDER_NOT_SUPPORTED_RU =
+  "Напоминания в приложении пока не поддерживаются. Можете задать вопрос по контенту пространства или «сделай выжимку».";
+const REMINDER_NOT_SUPPORTED_EN =
+  "Reminders are not supported in this app yet. You can ask about your space content or «make an excerpt».";
+
 /** Неоднозначный запрос: короткий или без явного намерения — перед глубоким поиском уточняем */
 function isAmbiguousQuestion(text: string): boolean {
   const t = text.replace(/\s+/g, " ").trim();
@@ -165,6 +180,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
   }
 
+  // Напоминания не поддерживаются — ответ сразу
+  if (isReminderRequest(userMessage)) {
+    const reply = user.language === "ru" ? REMINDER_NOT_SUPPORTED_RU : REMINDER_NOT_SUPPORTED_EN;
+    await prisma.threadMessage.createMany({
+      data: [
+        { threadId: thread.id, role: "USER", content: userMessage },
+        { threadId: thread.id, role: "ASSISTANT", content: reply },
+      ],
+    });
+    return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
+  }
+
   // Неоднозначный вопрос — уточняем, без глубокого поиска и без вызова LLM (или пользователь нажал кнопку выбора — intent передан)
   if (!skipClarification && isAmbiguousQuestion(userMessage)) {
     if (isDeclineReply(userMessage)) {
@@ -260,7 +287,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const tzLine = `Часовой пояс пользователя: ${user.timezone}. Текущие дата и время у пользователя (используй только их): ${nowInTz}. На вопросы о текущем времени или дате отвечай только по этим данным.`;
   const langRule =
     user.language === "ru"
-      ? "Весь ответ пиши по-русски. В оригинале оставляй только термины и названия (например: card scheme license, Level 2 Acts, Central Bank). Обычные слова (your, you, suggested, actions, steps, text и т.п.) — только по-русски. Никаких иероглифов и вкраплений португальского/английского вместо русских слов."
+      ? "КРИТИЧНО: весь ответ только по-русски. В оригинале оставляй только названия организаций, документов и термины (Central Bank of UAE, Company, Limited Liability Company). Все остальные слова — строго по-русски. Запрещено: английские фразы (here are, this is, please note), вьетнамский, португальский, смешение языков в одном предложении. Примеры неправильно: «ưới đây are», «finANCE», «Личность-либонаг» — так не писать. Пиши предложения полностью по-русски, только термины/названия латиницей."
       : "Use only Latin/Cyrillic, no ideographic characters.";
   const systemContent = `Ты помощник пользователя в приложении «my spaces». У пользователя выбрано пространство с сохранённым контентом (статьи, заметки, ссылки). Отвечай на вопросы по этому контенту: делай выжимки, пересказывай, ищи по смыслу, сравнивай. Если в контексте нет подходящего материала — честно скажи об этом. ${tzLine} Язык ответа: ${user.language === "ru" ? "русский" : "user's language"}. ${langRule} ${styleHint}
 
