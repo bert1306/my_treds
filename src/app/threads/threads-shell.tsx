@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ThreadStatus = "ACTIVE" | "ARCHIVED" | "DELETED";
 
@@ -33,6 +33,7 @@ type ChatMessage = {
   role: string;
   content: string;
   createdAt: string;
+  jobId?: string;
 };
 
 type Filter = "active" | "archived" | "deleted";
@@ -70,6 +71,9 @@ export function ThreadsShell() {
    const [deletingId, setDeletingId] = useState<string | null>(null);
    const [threadToDelete, setThreadToDelete] = useState<Thread | null>(null);
    const [ollamaStatus, setOllamaStatus] = useState<"checking" | "available" | "unavailable">("checking");
+  const [backgroundRunningCount, setBackgroundRunningCount] = useState(0);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function loadThreads(nextFilter: Filter = filter) {
     setLoading(true);
@@ -184,7 +188,84 @@ export function ThreadsShell() {
     }
   }
 
+  useEffect(() => {
+    if (!selectedThreadId) return;
+    const hasBackground = chatMessages.some((m) => m.jobId);
+    if (!hasBackground) {
+      setBackgroundRunningCount(0);
+      if (countPollingRef.current) {
+        clearInterval(countPollingRef.current);
+        countPollingRef.current = null;
+      }
+      return;
+    }
+    const tid = selectedThreadId;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/threads/${tid}/chat/jobs`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { running?: number };
+        setBackgroundRunningCount(data.running ?? 0);
+      } catch {
+        // ignore
+      }
+    };
+    void tick();
+    countPollingRef.current = setInterval(tick, 2000);
+    return () => {
+      if (countPollingRef.current) {
+        clearInterval(countPollingRef.current);
+        countPollingRef.current = null;
+      }
+    };
+  }, [selectedThreadId, chatMessages]);
+
+  function startPollingJob(jobId: string) {
+    if (!selectedThreadId) return;
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    const tid = selectedThreadId;
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/threads/${tid}/chat/jobs/${jobId}`);
+        const data = (await res.json()) as { status: string; reply?: string; error?: string };
+        if (data.status === "done") {
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+          setChatMessages((prev) =>
+            prev.map((m) =>
+              m.jobId === jobId ? { ...m, content: data.reply ?? "", jobId: undefined } : m
+            )
+          );
+          void loadMessages(tid);
+        } else if (data.status === "error") {
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+          setChatMessages((prev) =>
+            prev.map((m) =>
+              m.jobId === jobId ? { ...m, content: data.error ?? "Ошибка", jobId: undefined } : m
+            )
+          );
+        }
+      } catch {
+        // keep polling
+      }
+    }, 2000);
+  }
+
   async function handleSelectThread(id: string) {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    if (countPollingRef.current) {
+      clearInterval(countPollingRef.current);
+      countPollingRef.current = null;
+    }
+    setBackgroundRunningCount(0);
     setSelectedThreadId(id);
     setNewContentText("");
     setSearchQuery("");
@@ -294,7 +375,7 @@ export function ThreadsShell() {
     };
     setChatMessages((prev) => [...prev, userMsg]);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 180_000);
+    const timeoutId = setTimeout(() => controller.abort(), 35_000);
     try {
       const res = await fetch(`/api/threads/${selectedThreadId}/chat`, {
         method: "POST",
@@ -303,7 +384,22 @@ export function ThreadsShell() {
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json()) as { jobId?: string; reply?: string; message?: string; error?: string };
+      if (res.status === 202 && data.jobId) {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `job-${data.jobId}`,
+            role: "ASSISTANT",
+            content: "Обрабатывается в фоне… Результат появится здесь.",
+            createdAt: new Date().toISOString(),
+            jobId: data.jobId,
+          },
+        ]);
+        setChatLoading(false);
+        startPollingJob(data.jobId);
+        return;
+      }
       if (!res.ok) {
         const errText = data.error ?? "Не удалось получить ответ. Запустите Ollama: ollama run llama3.2";
         setChatMessages((prev) => [
@@ -334,8 +430,8 @@ export function ThreadsShell() {
       clearTimeout(timeoutId);
       const isTimeout = err instanceof Error && err.name === "AbortError";
       const msg = isTimeout
-        ? "Запрос отменён по таймауту (3 мин). Ответ Ollama может занимать 1–2 минуты — попробуйте ещё раз и подождите."
-        : "Не удалось получить ответ (сеть или сервер). Подождите 1–2 минуты и попробуйте снова.";
+        ? "Запрос отменён по таймауту. Долгие запросы обрабатываются в фоне — проверьте чат через минуту."
+        : "Не удалось получить ответ (сеть или сервер). Попробуйте снова.";
       setChatMessages((prev) => [
         ...prev,
         {
@@ -720,9 +816,16 @@ export function ThreadsShell() {
               )}
             </div>
             <div className="mt-4 border-t border-zinc-100 pt-4">
-              <p className="font-medium text-zinc-800">
-                Чат с помощником
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-zinc-800">
+                  Чат с помощником
+                </p>
+                {backgroundRunningCount > 0 && (
+                  <span className="shrink-0 rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-700" title="Фоновых заданий">
+                    В фоне: {backgroundRunningCount}
+                  </span>
+                )}
+              </div>
               {ollamaStatus === "checking" && (
                 <p className="mt-1 text-xs text-zinc-500">Проверка подключения к Ollama…</p>
               )}
@@ -753,6 +856,9 @@ export function ThreadsShell() {
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{m.content}</p>
+                    {m.role === "ASSISTANT" && m.jobId && (
+                      <p className="mt-1 text-xs text-zinc-500">Статус: выполняется…</p>
+                    )}
                   </div>
                 ))}
                 {chatLoading && (

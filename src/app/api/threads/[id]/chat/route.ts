@@ -3,11 +3,24 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { completeChat } from "@/lib/llm";
 import { getCurrentTimeInTimezone } from "@/lib/datetime";
+import {
+  getBackgroundAfterMs,
+  canAcceptBackground,
+  createJob,
+  getJob,
+  setJobDone,
+  setJobError,
+  BACKGROUND_JOB_TIMEOUT_MS,
+} from "@/lib/chat-jobs";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 const CONTEXT_MAX_CHARS = 40000;
 const HISTORY_MESSAGES = 20;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
   const user = await getCurrentUser();
@@ -101,18 +114,23 @@ ${context || "(пока нет загруженного контента в пр
     { role: "user", content: userMessage },
   ];
 
-  let reply: string;
+  const chatPromise = completeChat(messages);
+  const timeoutMs = getBackgroundAfterMs();
+  let winner: { type: "done"; reply: string } | { type: "timeout" };
   try {
-    reply = await completeChat(messages);
+    winner = await Promise.race([
+      chatPromise.then((reply) => ({ type: "done" as const, reply })),
+      sleep(timeoutMs).then(() => ({ type: "timeout" as const })),
+    ]);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Ошибка LLM";
     let hint = ` ${msg}`;
     if (msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("econnrefused")) {
       hint = " Запустите в терминале: ollama serve, затем ollama run llama3.2 (или установите Ollama с https://ollama.ai).";
-    } else if (msg.includes("404") || msg.toLowerCase().includes("model") && msg.toLowerCase().includes("not found")) {
+    } else if (msg.includes("404") || (msg.toLowerCase().includes("model") && msg.toLowerCase().includes("not found"))) {
       hint = " Модель не найдена. В терминале выполните: ollama pull llama3.2 (дождитесь загрузки), затем попробуйте снова.";
     } else if (msg.toLowerCase().includes("memory") || msg.toLowerCase().includes("system memory")) {
-      hint = " Не хватает памяти на сервере. Добавьте swap (см. инструкцию в чате) или в .env укажите модель поменьше: OLLAMA_MODEL=llama3.2:1b.";
+      hint = " Не хватает памяти на сервере. Добавьте swap или в .env укажите OLLAMA_MODEL=llama3.2:1b.";
     }
     return NextResponse.json(
       { error: "Не удалось получить ответ." + hint },
@@ -120,15 +138,86 @@ ${context || "(пока нет загруженного контента в пр
     );
   }
 
-  await prisma.threadMessage.createMany({
-    data: [
-      { threadId: thread.id, role: "USER", content: userMessage },
-      { threadId: thread.id, role: "ASSISTANT", content: reply },
-    ],
-  });
+  if (winner.type === "done") {
+    await prisma.threadMessage.createMany({
+      data: [
+        { threadId: thread.id, role: "USER", content: userMessage },
+        { threadId: thread.id, role: "ASSISTANT", content: winner.reply },
+      ],
+    });
+    return NextResponse.json(
+      { reply: winner.reply, message: winner.reply, sources },
+      { status: 200 }
+    );
+  }
+
+  if (!canAcceptBackground()) {
+    try {
+      const reply = await chatPromise;
+      await prisma.threadMessage.createMany({
+        data: [
+          { threadId: thread.id, role: "USER", content: userMessage },
+          { threadId: thread.id, role: "ASSISTANT", content: reply },
+        ],
+      });
+      return NextResponse.json(
+        { reply, message: reply, sources },
+        { status: 200 }
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Ошибка LLM";
+      let hint = ` ${msg}`;
+      if (msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("econnrefused")) {
+        hint = " Запустите в терминале: ollama serve, затем ollama run llama3.2 (или установите Ollama с https://ollama.ai).";
+      } else if (msg.includes("404") || (msg.toLowerCase().includes("model") && msg.toLowerCase().includes("not found"))) {
+        hint = " Модель не найдена. В терминале выполните: ollama pull llama3.2 (дождитесь загрузки), затем попробуйте снова.";
+      } else if (msg.toLowerCase().includes("memory") || msg.toLowerCase().includes("system memory")) {
+        hint = " Не хватает памяти на сервере. Добавьте swap или в .env укажите OLLAMA_MODEL=llama3.2:1b.";
+      }
+      return NextResponse.json(
+        { error: "Не удалось получить ответ." + hint },
+        { status: 502 }
+      );
+    }
+  }
+
+  const jobId = createJob(thread.id, user.id);
+  const timeoutHandle = setTimeout(() => {
+    const job = getJob(jobId);
+    if (job?.status === "running") {
+      setJobError(jobId, "Задание не выполнено по таймауту (5 мин). Попробуйте короче запрос или повторите позже.");
+    }
+  }, BACKGROUND_JOB_TIMEOUT_MS);
+
+  chatPromise
+    .then(async (reply) => {
+      clearTimeout(timeoutHandle);
+      await prisma.threadMessage.createMany({
+        data: [
+          { threadId: thread.id, role: "USER", content: userMessage },
+          { threadId: thread.id, role: "ASSISTANT", content: reply },
+        ],
+      });
+      setJobDone(jobId, reply, sources);
+    })
+    .catch((err) => {
+      clearTimeout(timeoutHandle);
+      const msg = err instanceof Error ? err.message : String(err);
+      let userMessage = "Фоновое задание не выполнено.";
+      if (msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("econnrefused")) {
+        userMessage += " Ollama недоступна. Запустите ollama serve и ollama run llama3.2.";
+      } else if (msg.toLowerCase().includes("memory") || msg.toLowerCase().includes("system memory")) {
+        userMessage += " Не хватает памяти на сервере. Используйте OLLAMA_MODEL=llama3.2:1b или добавьте swap.";
+      } else if (msg.includes("timeout") || msg.includes("abort")) {
+        userMessage += " Превышено время ожидания ответа Ollama. Попробуйте позже.";
+      } else if (msg.length < 200) {
+        userMessage += ` ${msg}`;
+      }
+      setJobError(jobId, userMessage);
+    });
 
   return NextResponse.json(
-    { reply, message: reply, sources },
-    { status: 200 }
+    { jobId, status: "processing", message: "Запрос обрабатывается в фоне. Результат появится в чате." },
+    { status: 202 }
   );
 }

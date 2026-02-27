@@ -24,6 +24,8 @@ type ChatMessage = {
   content: string;
   createdAt: string;
   sources?: RagSource[];
+  /** Фоновый запрос: пока выполняется, в чате показывается placeholder */
+  jobId?: string;
 };
 
 export function ThreadDetailShell({ threadId }: { threadId: string }) {
@@ -45,8 +47,11 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [ollamaStatus, setOllamaStatus] = useState<"checking" | "available" | "unavailable">("checking");
+  const [backgroundRunningCount, setBackgroundRunningCount] = useState(0);
   const chatFormRef = useRef<HTMLFormElement>(null);
   const chatMessagesScrollRef = useRef<HTMLDivElement>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function loadThread() {
     try {
@@ -104,11 +109,52 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
 
   useEffect(() => {
     setChatMessages([]);
+    setBackgroundRunningCount(0);
     void loadThread();
     void loadContent();
     void loadMessages();
     void checkOllama();
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      if (countPollingRef.current) {
+        clearInterval(countPollingRef.current);
+        countPollingRef.current = null;
+      }
+    };
   }, [threadId]);
+
+  useEffect(() => {
+    const hasBackground = chatMessages.some((m) => m.jobId);
+    if (!hasBackground) {
+      setBackgroundRunningCount(0);
+      if (countPollingRef.current) {
+        clearInterval(countPollingRef.current);
+        countPollingRef.current = null;
+      }
+      return;
+    }
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/threads/${threadId}/chat/jobs`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { running?: number };
+        setBackgroundRunningCount(data.running ?? 0);
+      } catch {
+        // ignore
+      }
+    };
+    void tick();
+    countPollingRef.current = setInterval(tick, 2000);
+    return () => {
+      if (countPollingRef.current) {
+        clearInterval(countPollingRef.current);
+        countPollingRef.current = null;
+      }
+    };
+  }, [threadId, chatMessages]);
 
   useEffect(() => {
     const el = chatMessagesScrollRef.current;
@@ -198,6 +244,44 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
     }
   }
 
+  function startPollingJob(jobId: string) {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/threads/${threadId}/chat/jobs/${jobId}`);
+        const data = await res.json().catch(() => ({}));
+        if (data.status === "done") {
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+          setChatMessages((prev) =>
+            prev.map((m) =>
+              m.jobId === jobId
+                ? { ...m, content: data.reply ?? "", sources: data.sources, jobId: undefined }
+                : m
+            )
+          );
+          void loadMessages();
+        } else if (data.status === "error") {
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+          setChatMessages((prev) =>
+            prev.map((m) =>
+              m.jobId === jobId
+                ? { ...m, content: data.error ?? "Ошибка", jobId: undefined }
+                : m
+            )
+          );
+        }
+      } catch {
+        // keep polling
+      }
+    }, 2000);
+  }
+
   async function handleSendChat(e: React.FormEvent) {
     e.preventDefault();
     const text = chatInput.trim();
@@ -207,7 +291,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
     const userMsg: ChatMessage = { id: `t-${Date.now()}`, role: "USER", content: text, createdAt: new Date().toISOString() };
     setChatMessages((prev) => [...prev, userMsg]);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 180_000);
+    const timeoutId = setTimeout(() => controller.abort(), 35_000);
     try {
       const res = await fetch(`/api/threads/${threadId}/chat`, {
         method: "POST",
@@ -217,6 +301,21 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
       });
       clearTimeout(timeoutId);
       const data = await res.json().catch(() => ({}));
+      if (res.status === 202 && data.jobId) {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `job-${data.jobId}`,
+            role: "ASSISTANT",
+            content: "Обрабатывается в фоне… Результат появится здесь.",
+            createdAt: new Date().toISOString(),
+            jobId: data.jobId,
+          },
+        ]);
+        setChatLoading(false);
+        startPollingJob(data.jobId);
+        return;
+      }
       if (!res.ok) {
         setChatMessages((prev) => [
           ...prev,
@@ -235,8 +334,8 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
       clearTimeout(timeoutId);
       const isTimeout = err instanceof Error && err.name === "AbortError";
       const msg = isTimeout
-        ? "Запрос отменён по таймауту (3 мин). Ответ Ollama на сервере может занимать 1–2 минуты — попробуйте ещё раз и подождите."
-        : "Не удалось получить ответ (сеть или сервер). Подождите 1–2 минуты и попробуйте снова — выжимка по большому контенту занимает время.";
+        ? "Запрос отменён по таймауту. Долгие запросы обрабатываются в фоне — проверьте чат через минуту."
+        : "Не удалось получить ответ (сеть или сервер). Попробуйте снова.";
       setChatMessages((prev) => [
         ...prev,
         { id: `e-${Date.now()}`, role: "ASSISTANT", content: msg, createdAt: new Date().toISOString() },
@@ -367,8 +466,17 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
       </aside>
 
       <section className="flex min-h-0 flex-col overflow-hidden rounded-[20px] bg-[var(--chat-surface)] p-6 shadow-[0_2px_16px_var(--shadow-card)] lg:h-full">
-        <h2 className="text-base font-semibold text-[var(--chat-secondary)]">Чат по пространству</h2>
-        <p className="mt-1 text-sm text-[var(--chat-secondary)]/70">Поиск по контенту пространства → ответ и источники.</p>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-[var(--chat-secondary)]">Чат по пространству</h2>
+            <p className="mt-1 text-sm text-[var(--chat-secondary)]/70">Поиск по контенту пространства → ответ и источники.</p>
+          </div>
+          {backgroundRunningCount > 0 && (
+            <span className="shrink-0 rounded-full bg-[var(--chat-secondary)]/15 px-3 py-1 text-xs font-medium text-[var(--chat-secondary)]" title="Фоновых заданий">
+              В фоне: {backgroundRunningCount}
+            </span>
+          )}
+        </div>
         {ollamaStatus === "unavailable" && (
           <div className="mt-3 rounded-[16px] border border-[var(--chat-secondary)]/20 bg-[var(--chat-bg)] px-4 py-3 text-sm text-[var(--chat-secondary)]">
             Ollama не запущена. Запустите: <code className="rounded bg-[var(--chat-secondary)]/10 px-1.5 py-0.5 font-mono text-xs">ollama serve</code>, затем <code className="rounded bg-[var(--chat-secondary)]/10 px-1.5 py-0.5 font-mono text-xs">ollama run llama3.2</code>
@@ -402,6 +510,9 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
                       className={`chat-bubble-appear rounded-[var(--chat-radius-lg)] px-5 py-4 text-base leading-relaxed shadow-[var(--chat-shadow-bubble)] ${isUser ? "bg-[var(--chat-primary)] text-white" : "bg-[var(--chat-surface)] text-[var(--chat-secondary)]"}`}
                     >
                       <p className="whitespace-pre-wrap">{m.content}</p>
+                      {!isUser && m.jobId && (
+                        <p className="mt-2 text-xs text-[var(--chat-secondary)]/70">Статус: выполняется…</p>
+                      )}
                       {!isUser && m.sources && m.sources.length > 0 && (
                         <div className="mt-3 border-t border-[var(--chat-secondary)]/10 pt-3">
                           <p className="mb-1 text-xs font-medium text-[var(--chat-secondary)]/60">Источники</p>
