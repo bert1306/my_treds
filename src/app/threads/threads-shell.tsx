@@ -73,7 +73,7 @@ export function ThreadsShell() {
    const [ollamaStatus, setOllamaStatus] = useState<"checking" | "available" | "unavailable">("checking");
   const [backgroundRunningCount, setBackgroundRunningCount] = useState(0);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chatMessagesRef = useRef<ChatMessage[]>([]);
 
   async function loadThreads(nextFilter: Filter = filter) {
     setLoading(true);
@@ -189,81 +189,78 @@ export function ThreadsShell() {
   }
 
   useEffect(() => {
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages]);
+
+  useEffect(() => {
     if (!selectedThreadId) return;
     const hasBackground = chatMessages.some((m) => m.jobId);
     if (!hasBackground) {
       setBackgroundRunningCount(0);
-      if (countPollingRef.current) {
-        clearInterval(countPollingRef.current);
-        countPollingRef.current = null;
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
       return;
     }
     const tid = selectedThreadId;
     const tick = async () => {
+      const current = chatMessagesRef.current;
+      const jobIds = current.filter((m) => m.jobId).map((m) => m.jobId!);
+      if (jobIds.length === 0) {
+        setBackgroundRunningCount(0);
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
+        return;
+      }
       try {
-        const res = await fetch(`/api/threads/${tid}/chat/jobs`);
-        if (!res.ok) return;
-        const data = (await res.json()) as { running?: number };
-        setBackgroundRunningCount(data.running ?? 0);
+        const countRes = await fetch(`/api/threads/${tid}/chat/jobs`);
+        if (countRes.ok) {
+          const countData = (await countRes.json()) as { running?: number };
+          setBackgroundRunningCount(countData.running ?? 0);
+        }
       } catch {
         // ignore
       }
+      for (const jobId of jobIds) {
+        try {
+          const res = await fetch(`/api/threads/${tid}/chat/jobs/${jobId}`);
+          const data = (await res.json()) as { status: string; reply?: string; error?: string };
+          if (data.status === "done") {
+            setChatMessages((prev) =>
+              prev.map((m) =>
+                m.jobId === jobId ? { ...m, content: data.reply ?? "", jobId: undefined } : m
+              )
+            );
+            void loadMessages(tid);
+          } else if (data.status === "error") {
+            setChatMessages((prev) =>
+              prev.map((m) =>
+                m.jobId === jobId ? { ...m, content: data.error ?? "Ошибка", jobId: undefined } : m
+              )
+            );
+          }
+        } catch {
+          // keep polling
+        }
+      }
     };
     void tick();
-    countPollingRef.current = setInterval(tick, 2000);
+    pollingRef.current = setInterval(tick, 2000);
     return () => {
-      if (countPollingRef.current) {
-        clearInterval(countPollingRef.current);
-        countPollingRef.current = null;
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
     };
   }, [selectedThreadId, chatMessages]);
-
-  function startPollingJob(jobId: string) {
-    if (!selectedThreadId) return;
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    const tid = selectedThreadId;
-    pollingRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/threads/${tid}/chat/jobs/${jobId}`);
-        const data = (await res.json()) as { status: string; reply?: string; error?: string };
-        if (data.status === "done") {
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
-          }
-          setChatMessages((prev) =>
-            prev.map((m) =>
-              m.jobId === jobId ? { ...m, content: data.reply ?? "", jobId: undefined } : m
-            )
-          );
-          void loadMessages(tid);
-        } else if (data.status === "error") {
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
-          }
-          setChatMessages((prev) =>
-            prev.map((m) =>
-              m.jobId === jobId ? { ...m, content: data.error ?? "Ошибка", jobId: undefined } : m
-            )
-          );
-        }
-      } catch {
-        // keep polling
-      }
-    }, 2000);
-  }
 
   async function handleSelectThread(id: string) {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
-    }
-    if (countPollingRef.current) {
-      clearInterval(countPollingRef.current);
-      countPollingRef.current = null;
     }
     setBackgroundRunningCount(0);
     setSelectedThreadId(id);
@@ -397,7 +394,6 @@ export function ThreadsShell() {
           },
         ]);
         setChatLoading(false);
-        startPollingJob(data.jobId);
         return;
       }
       if (!res.ok) {

@@ -92,7 +92,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const nowInTz = getCurrentTimeInTimezone(user.timezone, user.language === "ru" ? "ru" : "en");
   const tzLine = `Часовой пояс пользователя: ${user.timezone}. Текущие дата и время у пользователя (используй только их): ${nowInTz}. На вопросы о текущем времени или дате отвечай только по этим данным.`;
-  const langRule = user.language === "ru" ? "Только кириллица и латиница, без иероглифов и слов на других языках." : "Use only Latin/Cyrillic, no ideographic characters.";
+  const langRule =
+    user.language === "ru"
+      ? "Весь ответ пиши по-русски. В оригинале оставляй только термины и названия (например: card scheme license, Level 2 Acts, Central Bank). Обычные слова (your, you, suggested, actions, steps, text и т.п.) — только по-русски. Никаких иероглифов и вкраплений португальского/английского вместо русских слов."
+      : "Use only Latin/Cyrillic, no ideographic characters.";
   const systemContent = `Ты помощник пользователя в приложении «my spaces». У пользователя выбрано пространство с сохранённым контентом (статьи, заметки, ссылки). Отвечай на вопросы по этому контенту: делай выжимки, пересказывай, ищи по смыслу, сравнивай. Если в контексте нет подходящего материала — честно скажи об этом. ${tzLine} Язык ответа: ${user.language === "ru" ? "русский" : "user's language"}. ${langRule} ${styleHint}
 
 Контекст пространства (источники):
