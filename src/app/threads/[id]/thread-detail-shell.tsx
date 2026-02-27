@@ -279,12 +279,10 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
     }
   }
 
-  async function handleSendChat(e: React.FormEvent) {
-    e.preventDefault();
-    const text = chatInput.trim();
-    if (!text) return;
+  const CLARIFICATION_MARKER = "Уточните, пожалуйста";
+
+  async function sendMessage(text: string, intent?: "summary" | "search" | "general") {
     setChatLoading(true);
-    setChatInput("");
     const userMsg: ChatMessage = { id: `t-${Date.now()}`, role: "USER", content: text, createdAt: new Date().toISOString() };
     setChatMessages((prev) => [...prev, userMsg]);
     const controller = new AbortController();
@@ -293,7 +291,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
       const res = await fetch(`/api/threads/${threadId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, ...(intent && { intent }) }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -339,6 +337,24 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
       setChatLoading(false);
     }
   }
+
+  async function handleSendChat(e: React.FormEvent) {
+    e.preventDefault();
+    const text = chatInput.trim();
+    if (!text) return;
+    setChatInput("");
+    await sendMessage(text);
+  }
+
+  const lastMsg = chatMessages[chatMessages.length - 1];
+  const isLastClarification = lastMsg?.role === "ASSISTANT" && lastMsg.content.includes(CLARIFICATION_MARKER);
+  const clarificationTriggerMessage = (() => {
+    if (!isLastClarification) return null;
+    const idx = chatMessages.length - 1;
+    if (idx <= 0) return null;
+    const prev = chatMessages[idx - 1];
+    return prev.role === "USER" ? prev.content : null;
+  })();
 
   return (
     <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:items-stretch lg:h-[calc(100vh-18rem)]">
@@ -528,6 +544,33 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
                 </div>
               );
             })}
+            {isLastClarification && !chatLoading && (
+              <div className="flex flex-wrap gap-2 pl-11">
+                <button
+                  type="button"
+                  onClick={() => sendMessage("сделай выжимку")}
+                  className="rounded-[12px] border-2 border-[var(--chat-primary)] bg-[var(--chat-bg)] px-4 py-2 text-sm font-medium text-[var(--chat-secondary)] transition hover:bg-[var(--chat-primary)]/10"
+                >
+                  Выжимка по контенту
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sendMessage("найди в контенте")}
+                  className="rounded-[12px] border-2 border-[var(--chat-primary)] bg-[var(--chat-bg)] px-4 py-2 text-sm font-medium text-[var(--chat-secondary)] transition hover:bg-[var(--chat-primary)]/10"
+                >
+                  Поиск по контенту
+                </button>
+                {clarificationTriggerMessage && (
+                  <button
+                    type="button"
+                    onClick={() => sendMessage(clarificationTriggerMessage, "general")}
+                    className="rounded-[12px] border-2 border-[var(--chat-primary)] bg-[var(--chat-bg)] px-4 py-2 text-sm font-medium text-[var(--chat-secondary)] transition hover:bg-[var(--chat-primary)]/10"
+                  >
+                    Общий вопрос
+                  </button>
+                )}
+              </div>
+            )}
             {chatLoading && (
               <div className="flex items-end gap-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--chat-primary)] text-white" aria-hidden>

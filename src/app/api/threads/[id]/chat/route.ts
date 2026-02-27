@@ -59,6 +59,12 @@ function isAmbiguousQuestion(text: string): boolean {
     "как получить",
     "где указано",
     "зачем",
+    "как тебя зовут",
+    "как тебя звать",
+    "кто ты",
+    "что ты умеешь",
+    "твоё имя",
+    "как тебя",
   ];
   const looksClear = clearIntents.some((phrase) => lower.startsWith(phrase) || lower === phrase);
   if (looksClear) return false;
@@ -66,10 +72,21 @@ function isAmbiguousQuestion(text: string): boolean {
   return words <= 2 || t.length < 25;
 }
 
+/** Короткий отказ («нет», «не надо») — не зацикливаем уточнение */
+function isDeclineReply(text: string): boolean {
+  const t = text.toLowerCase().replace(/\s+/g, " ").trim();
+  const decline = ["нет", "не надо", "не нужно", "отмена", "no", "не хочу", "пропустить", "skip"];
+  return decline.includes(t) || t.length <= 3 && /^н(ет|е)?\s*$/i.test(t);
+}
+
 const CLARIFICATION_REPLY_RU =
   "Уточните, пожалуйста: вам нужна выжимка по контенту пространства, поиск по теме или ответ на конкретный вопрос? Например: «сделай выжимку» или «что сказано про …».";
 const CLARIFICATION_REPLY_EN =
   "Please clarify: do you need a summary of the space content, search by topic, or an answer to a specific question? For example: «make an excerpt» or «what does it say about…».";
+const DECLINE_REPLY_RU =
+  "Хорошо. Напишите свой вопрос — например, «сделай выжимку» или любой другой — и я отвечу.";
+const DECLINE_REPLY_EN =
+  "Sure. Type your question — e.g. «make an excerpt» or anything else — and I’ll answer.";
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
   const user = await getCurrentUser();
@@ -83,6 +100,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const userMessage = body.message.trim();
+  const skipClarification = body.intent === "summary" || body.intent === "search" || body.intent === "general";
   if (!userMessage) {
     return NextResponse.json({ error: "Message is empty" }, { status: 400 });
   }
@@ -114,8 +132,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
   }
 
-  // Неоднозначный вопрос — уточняем, без глубокого поиска и без вызова LLM
-  if (isAmbiguousQuestion(userMessage)) {
+  // Неоднозначный вопрос — уточняем, без глубокого поиска и без вызова LLM (или пользователь нажал кнопку выбора — intent передан)
+  if (!skipClarification && isAmbiguousQuestion(userMessage)) {
+    if (isDeclineReply(userMessage)) {
+      const reply = user.language === "ru" ? DECLINE_REPLY_RU : DECLINE_REPLY_EN;
+      await prisma.threadMessage.createMany({
+        data: [
+          { threadId: thread.id, role: "USER", content: userMessage },
+          { threadId: thread.id, role: "ASSISTANT", content: reply },
+        ],
+      });
+      return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
+    }
     const reply = user.language === "ru" ? CLARIFICATION_REPLY_RU : CLARIFICATION_REPLY_EN;
     await prisma.threadMessage.createMany({
       data: [

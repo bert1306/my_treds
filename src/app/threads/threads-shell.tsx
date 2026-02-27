@@ -357,13 +357,11 @@ export function ThreadsShell() {
     }
   }
 
-  async function handleSendChat(e: React.FormEvent) {
-    e.preventDefault();
+  const CLARIFICATION_MARKER = "Уточните, пожалуйста";
+
+  async function sendMessage(text: string, intent?: "summary" | "search" | "general") {
     if (!selectedThreadId) return;
-    const text = chatInput.trim();
-    if (!text) return;
     setChatLoading(true);
-    setChatInput("");
     const userMsg: ChatMessage = {
       id: `temp-${Date.now()}`,
       role: "USER",
@@ -377,7 +375,7 @@ export function ThreadsShell() {
       const res = await fetch(`/api/threads/${selectedThreadId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, ...(intent && { intent }) }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -440,6 +438,24 @@ export function ThreadsShell() {
       setChatLoading(false);
     }
   }
+
+  async function handleSendChat(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedThreadId) return;
+    const text = chatInput.trim();
+    if (!text) return;
+    setChatInput("");
+    await sendMessage(text);
+  }
+
+  const lastMsg = chatMessages[chatMessages.length - 1];
+  const isLastClarification = lastMsg?.role === "ASSISTANT" && lastMsg.content.includes(CLARIFICATION_MARKER);
+  const clarificationTriggerMessage = (() => {
+    if (!isLastClarification) return null;
+    if (chatMessages.length <= 1) return null;
+    const prev = chatMessages[chatMessages.length - 2];
+    return prev.role === "USER" ? prev.content : null;
+  })();
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -857,6 +873,33 @@ export function ThreadsShell() {
                     )}
                   </div>
                 ))}
+                {isLastClarification && !chatLoading && (
+                  <div className="mr-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => sendMessage("сделай выжимку")}
+                      className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+                    >
+                      Выжимка по контенту
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => sendMessage("найди в контенте")}
+                      className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+                    >
+                      Поиск по контенту
+                    </button>
+                    {clarificationTriggerMessage && (
+                      <button
+                        type="button"
+                        onClick={() => sendMessage(clarificationTriggerMessage, "general")}
+                        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+                      >
+                        Общий вопрос
+                      </button>
+                    )}
+                  </div>
+                )}
                 {chatLoading && (
                   <p className="text-xs text-zinc-500">Помощник печатает…</p>
                 )}
