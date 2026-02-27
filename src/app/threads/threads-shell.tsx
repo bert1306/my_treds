@@ -195,7 +195,7 @@ export function ThreadsShell() {
 
   useEffect(() => {
     if (!selectedThreadId) return;
-    const hasBackground = chatMessages.some((m) => m.jobId);
+    const hasBackground = chatMessages.some((m) => m.jobId || m.needConfirmationJobId);
     if (!hasBackground) {
       setBackgroundRunningCount(0);
       if (pollingRef.current) {
@@ -207,7 +207,9 @@ export function ThreadsShell() {
     const tid = selectedThreadId;
     const tick = async () => {
       const current = chatMessagesRef.current;
-      const jobIds = current.filter((m) => m.jobId).map((m) => m.jobId!);
+      const jobIds = current
+        .filter((m) => m.jobId || m.needConfirmationJobId)
+        .map((m) => (m.jobId ?? m.needConfirmationJobId)!);
       if (jobIds.length === 0) {
         setBackgroundRunningCount(0);
         if (pollingRef.current) {
@@ -232,14 +234,18 @@ export function ThreadsShell() {
           if (data.status === "done") {
             setChatMessages((prev) =>
               prev.map((m) =>
-                m.jobId === jobId ? { ...m, content: data.reply ?? "", jobId: undefined } : m
+                (m.jobId === jobId || m.needConfirmationJobId === jobId)
+                  ? { ...m, content: data.reply ?? "", jobId: undefined, needConfirmationJobId: undefined }
+                  : m
               )
             );
             void loadMessages(tid);
           } else if (data.status === "error") {
             setChatMessages((prev) =>
               prev.map((m) =>
-                m.jobId === jobId ? { ...m, content: data.error ?? "Ошибка", jobId: undefined } : m
+                (m.jobId === jobId || m.needConfirmationJobId === jobId)
+                  ? { ...m, content: data.error ?? "Ошибка", jobId: undefined, needConfirmationJobId: undefined }
+                  : m
               )
             );
           }

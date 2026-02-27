@@ -58,20 +58,41 @@ const META_REPLY_RU =
 const META_REPLY_EN =
   "I'm the assistant in «my spaces». I answer questions about your space content (summaries, search) and general questions. Try «make an excerpt» or ask anything.";
 
-/** Запрос напоминания / будильника — в приложении не реализовано, отвечаем сразу */
-function isReminderRequest(text: string): boolean {
-  const t = text.toLowerCase().replace(/\s+/g, " ").trim();
-  return (
-    /\bнапоминание\b|\bнапомни\b|\breminder\b|\bнапомни\s+мне\b|\bнапомнить\b/.test(t) ||
-    /\bчерез\s+\d+\s*(минут|час|часа|часов)\b.*позвонить\b/.test(t) ||
-    /\bпозвонить\s+через\b/.test(t)
+/** Проверка и парсинг запроса напоминания. Возвращает { content, dueAt } или null */
+function parseReminderRequest(text: string): { content: string; dueAt: Date } | null {
+  const t = text.replace(/\s+/g, " ").trim();
+  // «напоминание позвонить через 10 минут», «напомни через 2 часа отправить письмо»
+  const matchIn = t.match(
+    /(?:сделай\s+)?(?:напоминание|напомни(?:\s+мне)?)\s+(.+?)\s+через\s+(\d+)\s+(минут[уы]?|час[аов]?)/i
   );
+  if (matchIn) {
+    const content = matchIn[1].trim();
+    const num = parseInt(matchIn[2], 10);
+    const unit = matchIn[3].toLowerCase();
+    const ms =
+      unit.startsWith("минут") ? num * 60 * 1000
+      : unit.startsWith("час") ? num * 60 * 60 * 1000
+      : 0;
+    if (content && ms > 0) {
+      return { content, dueAt: new Date(Date.now() + ms) };
+    }
+  }
+  // «позвонить через 10 минут» без слова «напоминание»
+  const matchShort = t.match(/(.+?)\s+через\s+(\d+)\s+(минут[уы]?|час[аов]?)/i);
+  if (matchShort) {
+    const content = matchShort[1].trim();
+    const num = parseInt(matchShort[2], 10);
+    const unit = matchShort[3].toLowerCase();
+    const ms =
+      unit.startsWith("минут") ? num * 60 * 1000
+      : unit.startsWith("час") ? num * 60 * 60 * 1000
+      : 0;
+    if (content.length >= 2 && ms > 0) {
+      return { content, dueAt: new Date(Date.now() + ms) };
+    }
+  }
+  return null;
 }
-
-const REMINDER_NOT_SUPPORTED_RU =
-  "Напоминания в приложении пока не поддерживаются. Можете задать вопрос по контенту пространства или «сделай выжимку».";
-const REMINDER_NOT_SUPPORTED_EN =
-  "Reminders are not supported in this app yet. You can ask about your space content or «make an excerpt».";
 
 /** Неоднозначный запрос: короткий или без явного намерения — перед глубоким поиском уточняем */
 function isAmbiguousQuestion(text: string): boolean {
@@ -180,9 +201,44 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
   }
 
-  // Напоминания не поддерживаются — ответ сразу
-  if (isReminderRequest(userMessage)) {
-    const reply = user.language === "ru" ? REMINDER_NOT_SUPPORTED_RU : REMINDER_NOT_SUPPORTED_EN;
+  // Напоминание: парсим и создаём запись в календаре
+  const parsed = parseReminderRequest(userMessage);
+  if (parsed) {
+    await prisma.reminder.create({
+      data: {
+        userId: user.id,
+        threadId: thread.id,
+        content: parsed.content,
+        dueAt: parsed.dueAt,
+        status: "PENDING",
+      },
+    });
+    const dueStr = parsed.dueAt.toLocaleString(user.language === "ru" ? "ru-RU" : "en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "numeric",
+      month: "short",
+    });
+    const reply =
+      user.language === "ru"
+        ? `Напоминание «${parsed.content}» запланировано на ${dueStr}. Оно появится в списке, когда придёт время.`
+        : `Reminder «${parsed.content}» set for ${dueStr}. It will show in the list when due.`;
+    await prisma.threadMessage.createMany({
+      data: [
+        { threadId: thread.id, role: "USER", content: userMessage },
+        { threadId: thread.id, role: "ASSISTANT", content: reply },
+      ],
+    });
+    return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
+  }
+  if (
+    /\bнапоминание\b|\bнапомни\b|\breminder\b|\bнапомнить\b/i.test(userMessage) ||
+    /\bчерез\s+\d+\s*(минут|час)/i.test(userMessage)
+  ) {
+    const hintRu =
+      "Напишите, например: «напоминание позвонить через 10 минут» или «напомни через 2 часа отправить отчёт».";
+    const hintEn = 'Try e.g. "reminder to call in 10 minutes" or "remind me in 2 hours to send report".';
+    const reply = user.language === "ru" ? hintRu : hintEn;
     await prisma.threadMessage.createMany({
       data: [
         { threadId: thread.id, role: "USER", content: userMessage },

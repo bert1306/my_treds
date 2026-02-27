@@ -50,10 +50,35 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
   const [chatInput, setChatInput] = useState("");
   const [ollamaStatus, setOllamaStatus] = useState<"checking" | "available" | "unavailable">("checking");
   const [backgroundRunningCount, setBackgroundRunningCount] = useState(0);
+  const [dueReminders, setDueReminders] = useState<{ id: string; content: string; dueAt: string }[]>([]);
   const chatFormRef = useRef<HTMLFormElement>(null);
   const chatMessagesScrollRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatMessagesRef = useRef<ChatMessage[]>([]);
+
+  async function loadDueReminders() {
+    try {
+      const res = await fetch("/api/reminders/due");
+      if (!res.ok) return;
+      const data = (await res.json()) as { reminders: { id: string; content: string; dueAt: string }[] };
+      setDueReminders(data.reminders ?? []);
+    } catch {
+      setDueReminders([]);
+    }
+  }
+
+  async function markReminderDone(id: string) {
+    try {
+      const res = await fetch(`/api/reminders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "DONE" }),
+      });
+      if (res.ok) setDueReminders((prev) => prev.filter((r) => r.id !== id));
+    } catch {
+      // ignore
+    }
+  }
 
   async function loadThread() {
     try {
@@ -115,8 +140,11 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
     void loadThread();
     void loadContent();
     void loadMessages();
+    void loadDueReminders();
     void checkOllama();
+    const reminderInterval = setInterval(loadDueReminders, 60_000);
     return () => {
+      clearInterval(reminderInterval);
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
         pollingRef.current = null;
@@ -129,7 +157,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
   }, [chatMessages]);
 
   useEffect(() => {
-    const hasBackground = chatMessages.some((m) => m.jobId);
+    const hasBackground = chatMessages.some((m) => m.jobId || m.needConfirmationJobId);
     if (!hasBackground) {
       setBackgroundRunningCount(0);
       if (pollingRef.current) {
@@ -140,7 +168,9 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
     }
     const tick = async () => {
       const current = chatMessagesRef.current;
-      const jobIds = current.filter((m) => m.jobId).map((m) => m.jobId!);
+      const jobIds = current
+        .filter((m) => m.jobId || m.needConfirmationJobId)
+        .map((m) => (m.jobId ?? m.needConfirmationJobId)!);
       if (jobIds.length === 0) {
         setBackgroundRunningCount(0);
         if (pollingRef.current) {
@@ -165,8 +195,8 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
           if (data.status === "done") {
             setChatMessages((prev) =>
               prev.map((m) =>
-                m.jobId === jobId
-                  ? { ...m, content: data.reply ?? "", sources: data.sources, jobId: undefined }
+                (m.jobId === jobId || m.needConfirmationJobId === jobId)
+                  ? { ...m, content: data.reply ?? "", sources: data.sources, jobId: undefined, needConfirmationJobId: undefined }
                   : m
               )
             );
@@ -174,7 +204,9 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
           } else if (data.status === "error") {
             setChatMessages((prev) =>
               prev.map((m) =>
-                m.jobId === jobId ? { ...m, content: data.error ?? "Ошибка", jobId: undefined } : m
+                (m.jobId === jobId || m.needConfirmationJobId === jobId)
+                  ? { ...m, content: data.error ?? "Ошибка", jobId: undefined, needConfirmationJobId: undefined }
+                  : m
               )
             );
           }
@@ -428,6 +460,25 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
           </button>
         </section>
 
+        {dueReminders.length > 0 && (
+          <section className="mt-5 border-t border-ocean/10 pt-4">
+            <h3 className="text-sm font-medium text-ocean/80">Напоминания</h3>
+            <ul className="mt-2 space-y-2">
+              {dueReminders.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-2 rounded-[12px] bg-amber-50 p-2 border border-amber-200">
+                  <span className="min-w-0 flex-1 text-sm text-ocean">{r.content}</span>
+                  <button
+                    type="button"
+                    onClick={() => void markReminderDone(r.id)}
+                    className="shrink-0 rounded-[8px] bg-mint px-2 py-1 text-xs font-medium text-white hover:bg-mint-hover"
+                  >
+                    Выполнено
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <section className="mt-5 border-t border-ocean/10 pt-4">
           <h3 className="text-sm font-medium text-ocean/80">Добавить по ссылке</h3>
           <input

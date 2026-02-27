@@ -27,7 +27,19 @@ model User {
   magicLinkTokens     MagicLinkToken[]
   accounts            Account[]
 
-  threads             Thread[]
+  threads    Thread[]
+  reminders  Reminder[]
+}
+
+model Reminder {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  threadId  String?  // если задано в контексте пространства
+  content   String   // текст действия, например «позвонить»
+  dueAt     DateTime
+  status    String   @default("PENDING") // PENDING | DONE | CANCELLED
+  createdAt DateTime @default(now())
 }
 
 model Session {

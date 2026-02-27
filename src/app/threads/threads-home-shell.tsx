@@ -53,6 +53,31 @@ export function ThreadsHomeShell() {
   const [showTzPrompt, setShowTzPrompt] = useState(false);
   const [tzUpdating, setTzUpdating] = useState(false);
   const [threadToDelete, setThreadToDelete] = useState<Thread | null>(null);
+  const [dueReminders, setDueReminders] = useState<{ id: string; content: string; dueAt: string }[]>([]);
+
+  async function loadDueReminders() {
+    try {
+      const res = await fetch("/api/reminders/due");
+      if (!res.ok) return;
+      const data = (await res.json()) as { reminders: { id: string; content: string; dueAt: string }[] };
+      setDueReminders(data.reminders ?? []);
+    } catch {
+      setDueReminders([]);
+    }
+  }
+
+  async function markReminderDone(id: string) {
+    try {
+      const res = await fetch(`/api/reminders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "DONE" }),
+      });
+      if (res.ok) setDueReminders((prev) => prev.filter((r) => r.id !== id));
+    } catch {
+      // ignore
+    }
+  }
 
   async function loadThreads(nextFilter: Filter = filter, nextPage: number = page) {
     setLoading(true);
@@ -84,6 +109,12 @@ export function ThreadsHomeShell() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    void loadDueReminders();
+    const reminderInterval = setInterval(loadDueReminders, 60_000);
+    return () => clearInterval(reminderInterval);
+  }, []);
 
   useEffect(() => {
     checkOllama();
@@ -226,7 +257,27 @@ export function ThreadsHomeShell() {
   };
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-stretch">
+    <div className="flex flex-col gap-4">
+      {dueReminders.length > 0 && (
+        <div className="rounded-[16px] border border-amber-200 bg-amber-50 p-4">
+          <h3 className="text-sm font-semibold text-ocean">Напоминания</h3>
+          <ul className="mt-2 space-y-2">
+            {dueReminders.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-3">
+                <span className="min-w-0 flex-1 text-sm text-ocean">{r.content}</span>
+                <button
+                  type="button"
+                  onClick={() => void markReminderDone(r.id)}
+                  className="shrink-0 rounded-[10px] bg-mint px-3 py-1.5 text-xs font-medium text-white hover:bg-mint-hover"
+                >
+                  Выполнено
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-stretch">
       <section className="flex min-h-0 flex-col rounded-[20px] bg-white p-6 shadow-[0_2px_16px_var(--shadow-card)]">
         <h2 className="text-base font-semibold text-ocean">
           Пространства
@@ -462,6 +513,7 @@ export function ThreadsHomeShell() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
