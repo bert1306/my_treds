@@ -37,6 +37,27 @@ function isSimpleTimeDateQuestion(text: string): boolean {
   return timeDatePatterns.some((p) => p.test(t)) || /^(время|дата|который час)\s*\?*$/i.test(t);
 }
 
+/** Мета-вопросы о помощнике — ответ сразу, без контекста и без LLM (чтобы не уходить в фон) */
+function isSimpleMetaQuestion(text: string): boolean {
+  const t = text.toLowerCase().replace(/\s+/g, " ").trim();
+  const metaPatterns = [
+    /как\s+тебя\s+зовут/,
+    /как\s+тебя\s+звать/,
+    /кто\s+ты\s*\?*$/,
+    /что\s+ты\s+умеешь/,
+    /тво[ёe]\s+имя/,
+    /как\s+тебя\s*\?*$/,
+    /what('s|\s+is)\s+your\s+name/,
+    /who\s+are\s+you/,
+  ];
+  return metaPatterns.some((p) => p.test(t));
+}
+
+const META_REPLY_RU =
+  "Я помощник в приложении «my spaces». Отвечаю на вопросы по контенту пространства (выжимки, поиск) и на общие вопросы. Можете спросить «сделай выжимку» или задать любой вопрос.";
+const META_REPLY_EN =
+  "I'm the assistant in «my spaces». I answer questions about your space content (summaries, search) and general questions. Try «make an excerpt» or ask anything.";
+
 /** Неоднозначный запрос: короткий или без явного намерения — перед глубоким поиском уточняем */
 function isAmbiguousQuestion(text: string): boolean {
   const t = text.replace(/\s+/g, " ").trim();
@@ -123,6 +144,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       user.language === "ru"
         ? `Сейчас у вас: ${nowInTz}.`
         : `Current time for you: ${nowInTz}.`;
+    await prisma.threadMessage.createMany({
+      data: [
+        { threadId: thread.id, role: "USER", content: userMessage },
+        { threadId: thread.id, role: "ASSISTANT", content: reply },
+      ],
+    });
+    return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
+  }
+
+  // Мета-вопросы о помощнике — ответ сразу, без контекста и без LLM
+  if (isSimpleMetaQuestion(userMessage)) {
+    const reply = user.language === "ru" ? META_REPLY_RU : META_REPLY_EN;
     await prisma.threadMessage.createMany({
       data: [
         { threadId: thread.id, role: "USER", content: userMessage },
