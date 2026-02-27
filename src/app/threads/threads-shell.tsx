@@ -387,31 +387,39 @@ export function ThreadsShell() {
         error?: string;
         needConfirmation?: boolean;
       };
+      const ensureUserAndAssistant = (
+        prev: ChatMessage[],
+        assistantMsg: ChatMessage,
+      ): ChatMessage[] => {
+        const hasUser =
+          prev.some((x) => x.id === userMsg.id) ||
+          (prev.length > 0 && prev[prev.length - 1].role === "USER" && prev[prev.length - 1].content === text);
+        return hasUser ? [...prev, assistantMsg] : [...prev, userMsg, assistantMsg];
+      };
+
       if (res.status === 202 && data.jobId) {
-        setChatMessages((prev) => [
-          ...prev,
-          {
+        setChatMessages((prev) =>
+          ensureUserAndAssistant(prev, {
             id: `job-${data.jobId}`,
             role: "ASSISTANT",
             content: "Обрабатывается в фоне… Результат появится здесь.",
             createdAt: new Date().toISOString(),
             jobId: data.jobId,
-          },
-        ]);
+          })
+        );
         setChatLoading(false);
         return;
       }
       if (res.status === 200 && data.needConfirmation && data.jobId) {
-        setChatMessages((prev) => [
-          ...prev,
-          {
+        setChatMessages((prev) =>
+          ensureUserAndAssistant(prev, {
             id: `confirm-${data.jobId}`,
             role: "ASSISTANT",
             content: data.message ?? data.reply ?? "",
             createdAt: new Date().toISOString(),
             needConfirmationJobId: data.jobId,
-          },
-        ]);
+          })
+        );
         setChatLoading(false);
         return;
       }
@@ -905,18 +913,23 @@ export function ThreadsShell() {
                   >
                     <p className="whitespace-pre-wrap">{m.content}</p>
                     {m.role === "ASSISTANT" && m.needConfirmationJobId && (
-                      <div className="mt-2">
-                        <button
-                          type="button"
-                          onClick={() => confirmBackgroundJob(m.needConfirmationJobId!)}
-                          className="rounded border border-zinc-400 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                        >
-                          Да, подставить в чат
-                        </button>
-                      </div>
+                      <>
+                        <p className="mt-1 text-xs font-medium text-zinc-600">
+                          Статус: задание в фоне. Нажмите кнопку — результат подставится сюда.
+                        </p>
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={() => confirmBackgroundJob(m.needConfirmationJobId!)}
+                            className="rounded border border-zinc-400 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                          >
+                            Да, подставить в чат
+                          </button>
+                        </div>
+                      </>
                     )}
                     {m.role === "ASSISTANT" && m.jobId && (
-                      <p className="mt-1 text-xs text-zinc-500">Статус: выполняется…</p>
+                      <p className="mt-1 text-xs font-medium text-zinc-600">Статус: выполняется в фоне…</p>
                     )}
                   </div>
                 ))}

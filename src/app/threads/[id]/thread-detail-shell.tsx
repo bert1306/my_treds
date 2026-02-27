@@ -298,31 +298,38 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
       });
       clearTimeout(timeoutId);
       const data = await res.json().catch(() => ({}));
+      const ensureUserAndAssistant = (
+        prev: ChatMessage[],
+        assistantMsg: ChatMessage,
+      ): ChatMessage[] => {
+        const hasUser = prev.some((x) => x.id === userMsg.id) ||
+          (prev.length > 0 && prev[prev.length - 1].role === "USER" && prev[prev.length - 1].content === text);
+        return hasUser ? [...prev, assistantMsg] : [...prev, userMsg, assistantMsg];
+      };
+
       if (res.status === 202 && data.jobId) {
-        setChatMessages((prev) => [
-          ...prev,
-          {
+        setChatMessages((prev) =>
+          ensureUserAndAssistant(prev, {
             id: `job-${data.jobId}`,
             role: "ASSISTANT",
             content: "Обрабатывается в фоне… Результат появится здесь.",
             createdAt: new Date().toISOString(),
             jobId: data.jobId,
-          },
-        ]);
+          })
+        );
         setChatLoading(false);
         return;
       }
       if (res.status === 200 && data.needConfirmation && data.jobId) {
-        setChatMessages((prev) => [
-          ...prev,
-          {
+        setChatMessages((prev) =>
+          ensureUserAndAssistant(prev, {
             id: `confirm-${data.jobId}`,
             role: "ASSISTANT",
             content: data.message ?? data.reply ?? "",
             createdAt: new Date().toISOString(),
             needConfirmationJobId: data.jobId,
-          },
-        ]);
+          })
+        );
         setChatLoading(false);
         return;
       }
@@ -554,18 +561,25 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
                     >
                       <p className="whitespace-pre-wrap">{m.content}</p>
                       {!isUser && m.needConfirmationJobId && (
-                        <div className="mt-3">
-                          <button
-                            type="button"
-                            onClick={() => confirmBackgroundJob(m.needConfirmationJobId!)}
-                            className="rounded-[12px] border-2 border-[var(--chat-primary)] bg-transparent px-4 py-2 text-sm font-medium text-[var(--chat-primary)] transition hover:bg-[var(--chat-primary)]/10"
-                          >
-                            Да, подставить в чат
-                          </button>
-                        </div>
+                        <>
+                          <p className="mt-2 text-xs font-medium text-[var(--chat-secondary)]/80">
+                            Статус: задание выполняется в фоне. Нажмите кнопку — результат подставится сюда.
+                          </p>
+                          <div className="mt-3">
+                            <button
+                              type="button"
+                              onClick={() => confirmBackgroundJob(m.needConfirmationJobId!)}
+                              className="rounded-[12px] border-2 border-[var(--chat-primary)] bg-transparent px-4 py-2 text-sm font-medium text-[var(--chat-primary)] transition hover:bg-[var(--chat-primary)]/10"
+                            >
+                              Да, подставить в чат
+                            </button>
+                          </div>
+                        </>
                       )}
                       {!isUser && m.jobId && (
-                        <p className="mt-2 text-xs text-[var(--chat-secondary)]/70">Статус: выполняется…</p>
+                        <p className="mt-2 text-xs font-medium text-[var(--chat-secondary)]/80">
+                          Статус: выполняется в фоне…
+                        </p>
                       )}
                       {!isUser && m.sources && m.sources.length > 0 && (
                         <div className="mt-3 border-t border-[var(--chat-secondary)]/10 pt-3">
