@@ -651,7 +651,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
                               onClick={() => confirmBackgroundJob(m.needConfirmationJobId!)}
                               className="rounded-[12px] border-2 border-[var(--chat-primary)] bg-transparent px-4 py-2 text-sm font-medium text-[var(--chat-primary)] transition hover:bg-[var(--chat-primary)]/10"
                             >
-                              Да, подставить в чат
+                              Да, запустить обработку в фоне
                             </button>
                           </div>
                         </>
@@ -684,10 +684,10 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
               <div className="flex flex-wrap gap-2 pl-11">
                 <button
                   type="button"
-                  onClick={() => sendMessage("сделай выжимку")}
+                  onClick={() => sendMessage("сделай краткое изложение")}
                   className="rounded-[12px] border-2 border-[var(--chat-primary)] bg-[var(--chat-bg)] px-4 py-2 text-sm font-medium text-[var(--chat-secondary)] transition hover:bg-[var(--chat-primary)]/10"
                 >
-                  Выжимка по контенту
+                  Краткое изложение
                 </button>
                 <button
                   type="button"
@@ -731,7 +731,7 @@ export function ThreadDetailShell({ threadId }: { threadId: string }) {
                 chatFormRef.current?.requestSubmit();
               }
             }}
-            placeholder="Вопрос или «сделай выжимку»…"
+            placeholder="Вопрос или «сделай краткое изложение»…"
             rows={1}
             className="min-h-[24px] max-h-[200px] min-w-0 flex-1 resize-none border-none bg-transparent py-3 text-base leading-normal text-[var(--chat-secondary)] outline-none placeholder:text-[var(--chat-text-muted)]"
           />

@@ -923,11 +923,11 @@ export function ThreadsShell() {
                 <p className="mt-1 text-xs text-green-700">Ollama подключена, можно задавать вопросы.</p>
               )}
               <p className="mt-1 text-xs text-zinc-500">
-                Задайте вопрос по контенту пространства: выжимка, пересказ, ответ по смыслу.
+                Задайте вопрос по контенту пространства: краткое изложение, пересказ, ответ по смыслу.
               </p>
               <div className="mt-2 max-h-64 overflow-y-auto space-y-2 rounded-lg border border-zinc-200 bg-zinc-50/50 p-2">
                 {chatMessages.length === 0 && !chatLoading && (
-                  <p className="text-xs text-zinc-500">Пока нет сообщений. Напишите вопрос или «сделай выжимку из этого источника».</p>
+                  <p className="text-xs text-zinc-500">Пока нет сообщений. Напишите вопрос или «сделай краткое изложение».</p>
                 )}
                 {chatMessages.map((m, msgIndex) => {
                   const requestText = m.role === "ASSISTANT" && msgIndex > 0 && chatMessages[msgIndex - 1].role === "USER"
@@ -957,7 +957,7 @@ export function ThreadsShell() {
                             onClick={() => confirmBackgroundJob(m.needConfirmationJobId!)}
                             className="rounded border border-zinc-400 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
                           >
-                            Да, подставить в чат
+                            Да, запустить обработку в фоне
                           </button>
                         </div>
                       </>
@@ -971,10 +971,10 @@ export function ThreadsShell() {
                   <div className="mr-4 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => sendMessage("сделай выжимку")}
+                      onClick={() => sendMessage("сделай краткое изложение")}
                       className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
                     >
-                      Выжимка по контенту
+                      Краткое изложение
                     </button>
                     <button
                       type="button"
@@ -1003,7 +1003,7 @@ export function ThreadsShell() {
                   type="text"
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="Вопрос или «сделай выжимку»…"
+                  placeholder="Вопрос или «сделай краткое изложение»…"
                   className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                 />
                 <button

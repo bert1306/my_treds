@@ -54,7 +54,7 @@ function isSimpleMetaQuestion(text: string): boolean {
 }
 
 const META_REPLY_RU =
-  "Я помощник в приложении «my spaces». Отвечаю на вопросы по контенту пространства (выжимки, поиск) и на общие вопросы. Можете спросить «сделай выжимку» или задать любой вопрос.";
+  "Я помощник в приложении «my spaces». Отвечаю на вопросы по контенту пространства (краткие изложения, поиск) и на общие вопросы. Можете спросить «сделай краткое изложение» или задать любой вопрос.";
 const META_REPLY_EN =
   "I'm the assistant in «my spaces». I answer questions about your space content (summaries, search) and general questions. Try «make an excerpt» or ask anything.";
 
@@ -100,9 +100,9 @@ function isAmbiguousQuestion(text: string): boolean {
   if (t.length >= 35) return false; // развёрнутый вопрос — идём в поиск
   const lower = t.toLowerCase();
   const clearIntents = [
-    "сделай выжимку",
-    "выжимку",
-    "выжимка",
+    "сделай краткое изложение",
+    "краткое изложение",
+    "краткие изложения",
     "кратко",
     "суть",
     "перескажи",
@@ -137,11 +137,11 @@ function isDeclineReply(text: string): boolean {
 }
 
 const CLARIFICATION_REPLY_RU =
-  "Уточните, пожалуйста: вам нужна выжимка по контенту пространства, поиск по теме или ответ на конкретный вопрос? Например: «сделай выжимку» или «что сказано про …».";
+  "Уточните, пожалуйста: вам нужно краткое изложение по контенту пространства, поиск по теме или ответ на конкретный вопрос? Например: «сделай краткое изложение» или «что сказано про …».";
 const CLARIFICATION_REPLY_EN =
   "Please clarify: do you need a summary of the space content, search by topic, or an answer to a specific question? For example: «make an excerpt» or «what does it say about…».";
 const DECLINE_REPLY_RU =
-  "Хорошо. Напишите свой вопрос — например, «сделай выжимку» или любой другой — и я отвечу.";
+  "Хорошо. Напишите свой вопрос — например, «сделай краткое изложение» или любой другой — и я отвечу.";
 const DECLINE_REPLY_EN =
   "Sure. Type your question — e.g. «make an excerpt» or anything else — and I’ll answer.";
 
@@ -345,7 +345,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     user.language === "ru"
       ? `КРИТИЧНО — язык ответа: только русский. Допустимо латиницей только: названия организаций (Central Bank of UAE, FSRA), аббревиатуры (AML, KYC, CFT, ISO 27001), типы компаний как термин (Limited Liability Company). Все глаголы, местоимения, связки и пояснения — строго по-русски. ЗАПРЕЩЕНО писать по-английски: Exist/There exist, need a/must have/must be/must ensure/must notify/must register, Additionally, It's worth noting, It is essential, и любые другие английские фразы вместо русских. Неправильно: «Exist requirements», «need a license», «must have», «Регistership», иероглифы (認 и т.д.). Правильно: «Существуют требования», «требуется лицензия», «должны иметь», «Регистрация». Каждое предложение строится по-русски; внутри можно оставить только термины/названия.`
       : "Use only Latin/Cyrillic, no ideographic characters.";
-  const systemContent = `Ты помощник пользователя в приложении «my spaces». У пользователя выбрано пространство с сохранённым контентом (статьи, заметки, ссылки). Отвечай на вопросы по этому контенту: делай выжимки, пересказывай, ищи по смыслу, сравнивай. Если в контексте нет подходящего материала — честно скажи об этом. ${tzLine} Язык ответа: ${user.language === "ru" ? "русский" : "user's language"}. ${langRule} ${styleHint}
+  const systemContent = `Ты помощник пользователя в приложении «my spaces». У пользователя выбрано пространство с сохранённым контентом (статьи, заметки, ссылки). Отвечай на вопросы по этому контенту: делай краткие изложения, пересказывай, ищи по смыслу, сравнивай. Если в контексте нет подходящего материала — честно скажи об этом. ${tzLine} Язык ответа: ${user.language === "ru" ? "русский" : "user's language"}. ${langRule} ${styleHint}
 
 Контекст пространства (источники):
 ${context || "(пока нет загруженного контента в пространстве)"}`;
