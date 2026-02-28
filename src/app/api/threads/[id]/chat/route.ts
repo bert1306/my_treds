@@ -94,56 +94,6 @@ function parseReminderRequest(text: string): { content: string; dueAt: Date } | 
   return null;
 }
 
-/** Неоднозначный запрос: короткий или без явного намерения — перед глубоким поиском уточняем */
-function isAmbiguousQuestion(text: string): boolean {
-  const t = text.replace(/\s+/g, " ").trim();
-  if (t.length >= 35) return false; // развёрнутый вопрос — идём в поиск
-  const lower = t.toLowerCase();
-  const clearIntents = [
-    "сделай краткое изложение",
-    "краткое изложение",
-    "краткие изложения",
-    "кратко",
-    "суть",
-    "перескажи",
-    "найди",
-    "расскажи",
-    "опиши",
-    "сравни",
-    "что сказано",
-    "что в контенте",
-    "что говорится",
-    "как получить",
-    "где указано",
-    "зачем",
-    "как тебя зовут",
-    "как тебя звать",
-    "кто ты",
-    "что ты умеешь",
-    "твоё имя",
-    "как тебя",
-  ];
-  const looksClear = clearIntents.some((phrase) => lower.startsWith(phrase) || lower === phrase);
-  if (looksClear) return false;
-  const words = t.split(/\s+/).length;
-  return words <= 2 || t.length < 25;
-}
-
-/** Короткий отказ («нет», «не надо») — не зацикливаем уточнение */
-function isDeclineReply(text: string): boolean {
-  const t = text.toLowerCase().replace(/\s+/g, " ").trim();
-  const decline = ["нет", "не надо", "не нужно", "отмена", "no", "не хочу", "пропустить", "skip"];
-  return decline.includes(t) || t.length <= 3 && /^н(ет|е)?\s*$/i.test(t);
-}
-
-const CLARIFICATION_REPLY_RU =
-  "Уточните, пожалуйста: вам нужно краткое изложение по контенту пространства, поиск по теме или ответ на конкретный вопрос? Например: «сделай краткое изложение» или «что сказано про …».";
-const CLARIFICATION_REPLY_EN =
-  "Please clarify: do you need a summary of the space content, search by topic, or an answer to a specific question? For example: «make an excerpt» or «what does it say about…».";
-const DECLINE_REPLY_RU =
-  "Хорошо. Напишите свой вопрос — например, «сделай краткое изложение» или любой другой — и я отвечу.";
-const DECLINE_REPLY_EN =
-  "Sure. Type your question — e.g. «make an excerpt» or anything else — and I’ll answer.";
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
   const user = await getCurrentUser();
@@ -157,7 +107,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const userMessage = body.message.trim();
-  const skipClarification = body.intent === "summary" || body.intent === "search" || body.intent === "general";
   if (!userMessage) {
     return NextResponse.json({ error: "Message is empty" }, { status: 400 });
   }
@@ -248,28 +197,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
   }
 
-  // Неоднозначный вопрос — уточняем, без глубокого поиска и без вызова LLM (или пользователь нажал кнопку выбора — intent передан)
-  if (!skipClarification && isAmbiguousQuestion(userMessage)) {
-    if (isDeclineReply(userMessage)) {
-      const reply = user.language === "ru" ? DECLINE_REPLY_RU : DECLINE_REPLY_EN;
-      await prisma.threadMessage.createMany({
-        data: [
-          { threadId: thread.id, role: "USER", content: userMessage },
-          { threadId: thread.id, role: "ASSISTANT", content: reply },
-        ],
-      });
-      return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
-    }
-    const reply = user.language === "ru" ? CLARIFICATION_REPLY_RU : CLARIFICATION_REPLY_EN;
-    await prisma.threadMessage.createMany({
-      data: [
-        { threadId: thread.id, role: "USER", content: userMessage },
-        { threadId: thread.id, role: "ASSISTANT", content: reply },
-      ],
-    });
-    return NextResponse.json({ reply, message: reply, sources: [] }, { status: 200 });
-  }
-
   // Опционально: лёгкая LLM до основной — быстрый ответ без контекста (приветствия, простые вопросы)
   const lightLlmEnabled = process.env.LIGHT_LLM_ENABLED === "true";
   if (lightLlmEnabled) {
@@ -298,16 +225,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
   }
 
-  const searchItems = await prisma.contentItem.findMany({
-    where: {
-      threadId: thread.id,
-      originalText: { contains: userMessage },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
-
-  const sources = searchItems.map((i) => ({
+  // Всегда используем полный контент пространства: ответ по смыслу (найти гипотезы, перечислить и т.д.), а не поиск по совпадению слов
+  const sources = thread.contentItems.slice(0, 30).map((i) => ({
     id: i.id,
     threadId: i.threadId,
     threadTitle: thread.title,
@@ -315,24 +234,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     snippet: i.originalText.slice(0, 300),
   }));
 
-  let context: string;
-  if (searchItems.length > 0) {
-    const blocks = searchItems.map((i) => {
+  const contentBlocks = thread.contentItems
+    .map((i) => {
       const title = i.title ? `[${i.title}]\n` : "";
-      return title + i.originalText.slice(0, 4000);
-    });
-    context = blocks.join("\n\n---\n\n").slice(0, CONTEXT_MAX_CHARS);
-    if (blocks.join("").length > CONTEXT_MAX_CHARS) context += "\n\n[... обрезано ...]";
-  } else {
-    const contentBlocks = thread.contentItems
-      .map((i) => {
-        const title = i.title ? `[${i.title}]\n` : "";
-        return title + i.originalText;
-      })
-      .join("\n\n---\n\n");
-    context = contentBlocks.slice(0, CONTEXT_MAX_CHARS);
-    if (contentBlocks.length > CONTEXT_MAX_CHARS) context += "\n\n[... текст обрезан ...]";
-  }
+      return title + i.originalText;
+    })
+    .join("\n\n---\n\n");
+  const context = contentBlocks.slice(0, CONTEXT_MAX_CHARS) + (contentBlocks.length > CONTEXT_MAX_CHARS ? "\n\n[... текст обрезан ...]" : "");
 
   const styleHint =
     user.style === "CASUAL"
@@ -345,7 +253,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     user.language === "ru"
       ? `КРИТИЧНО — язык ответа: только русский. Допустимо латиницей только: названия организаций (Central Bank of UAE, FSRA), аббревиатуры (AML, KYC, CFT, ISO 27001), типы компаний как термин (Limited Liability Company). Все глаголы, местоимения, связки и пояснения — строго по-русски. ЗАПРЕЩЕНО писать по-английски: Exist/There exist, need a/must have/must be/must ensure/must notify/must register, Additionally, It's worth noting, It is essential, и любые другие английские фразы вместо русских. Неправильно: «Exist requirements», «need a license», «must have», «Регistership», иероглифы (認 и т.д.). Правильно: «Существуют требования», «требуется лицензия», «должны иметь», «Регистрация». Каждое предложение строится по-русски; внутри можно оставить только термины/названия.`
       : "Use only Latin/Cyrillic, no ideographic characters.";
-  const systemContent = `Ты помощник пользователя в приложении «my spaces». У пользователя выбрано пространство с сохранённым контентом (статьи, заметки, ссылки). Отвечай на вопросы по этому контенту: делай краткие изложения, пересказывай, ищи по смыслу, сравнивай. Если в контексте нет подходящего материала — честно скажи об этом. ${tzLine} Язык ответа: ${user.language === "ru" ? "русский" : "user's language"}. ${langRule} ${styleHint}
+  const systemContent = `Ты помощник пользователя в приложении «my spaces». У пользователя выбрано пространство с сохранённым контентом (статьи, заметки, ссылки). Отвечай на вопросы по этому контенту по смыслу: если спрашивают «какие гипотезы» — найди в текстах раздел про гипотезы и перечисли их; если «требования» — выдели и перечисли требования; делай краткие изложения, пересказывай, сравнивай. Дай ответ на вопрос пользователя, а не просто поиск по словам. Если в контексте нет подходящего материала — честно скажи об этом. ${tzLine} Язык ответа: ${user.language === "ru" ? "русский" : "user's language"}. ${langRule} ${styleHint}
 
 Контекст пространства (источники):
 ${context || "(пока нет загруженного контента в пространстве)"}`;

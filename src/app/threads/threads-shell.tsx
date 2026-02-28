@@ -364,9 +364,7 @@ export function ThreadsShell() {
     }
   }
 
-  const CLARIFICATION_MARKER = "Уточните, пожалуйста";
-
-  async function sendMessage(text: string, intent?: "summary" | "search" | "general") {
+  async function sendMessage(text: string) {
     if (!selectedThreadId) return;
     setChatLoading(true);
     const userMsg: ChatMessage = {
@@ -382,7 +380,7 @@ export function ThreadsShell() {
       const res = await fetch(`/api/threads/${selectedThreadId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, ...(intent && { intent }) }),
+        body: JSON.stringify({ message: text }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -503,15 +501,6 @@ export function ThreadsShell() {
     const userText = i > 0 && chatMessages[i - 1].role === "USER" ? chatMessages[i - 1].content : "";
     return [{ id: m.jobId ?? m.needConfirmationJobId!, text: userText || "…" }];
   });
-
-  const lastMsg = chatMessages[chatMessages.length - 1];
-  const isLastClarification = lastMsg?.role === "ASSISTANT" && lastMsg.content.includes(CLARIFICATION_MARKER);
-  const clarificationTriggerMessage = (() => {
-    if (!isLastClarification) return null;
-    if (chatMessages.length <= 1) return null;
-    const prev = chatMessages[chatMessages.length - 2];
-    return prev.role === "USER" ? prev.content : null;
-  })();
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -967,33 +956,6 @@ export function ThreadsShell() {
                     )}
                   </div>
                 ); })}
-                {isLastClarification && !chatLoading && (
-                  <div className="mr-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => sendMessage("сделай краткое изложение")}
-                      className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
-                    >
-                      Краткое изложение
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => sendMessage("найди в контенте")}
-                      className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
-                    >
-                      Поиск по контенту
-                    </button>
-                    {clarificationTriggerMessage && (
-                      <button
-                        type="button"
-                        onClick={() => sendMessage(clarificationTriggerMessage, "general")}
-                        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
-                      >
-                        Общий вопрос
-                      </button>
-                    )}
-                  </div>
-                )}
                 {chatLoading && (
                   <p className="text-xs text-zinc-500">Помощник печатает…</p>
                 )}
