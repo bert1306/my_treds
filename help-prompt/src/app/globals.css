@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #7dd3c0;
+  --color-primary-hover: #6bc4b0;
+  --color-secondary: #2a5b6f;
+  --color-bg: #f8f6f3;
+  --color-surface: #ffffff;
+  --color-text-primary: #2a5b6f;
+  --color-text-inverse: #ffffff;
+  --color-text-muted: rgba(42, 91, 111, 0.5);
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --shadow-sm: 0 1px 2px rgba(42, 91, 111, 0.06);
+  --shadow-md: 0 4px 12px rgba(42, 91, 111, 0.08);
+  --transition: 0.2s ease-out;
+}
+
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-secondary);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+}
+
+.messages-area {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px 20px 120px;
+  height: calc(100vh - 64px - 80px);
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(42, 91, 111, 0.3) transparent;
+}
+.messages-area::-webkit-scrollbar { width: 6px; }
+.messages-area::-webkit-scrollbar-track { background: transparent; }
+.messages-area::-webkit-scrollbar-thumb {
+  background: rgba(42, 91, 111, 0.3);
+  border-radius: 3px;
+}
+.messages-area::-webkit-scrollbar-thumb:hover { background: rgba(42, 91, 111, 0.5); }
+
+@keyframes messageAppear {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.bubble { animation: messageAppear 0.3s ease-out; }
+
+@keyframes typingDot {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+}
+.typing-dot { animation: typingDot 0.6s infinite ease-in-out; }
+
+.input-area {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--color-surface);
+  border-top: 1px solid rgba(42, 91, 111, 0.1);
+  padding: 16px 20px 24px;
+  box-shadow: 0 -4px 20px rgba(42, 91, 111, 0.05);
+}
