@@ -58,6 +58,30 @@ export default function ChatPage() {
 
   const hasMessages = messages.length > 0;
 
+  const inputBlock = (
+    <div className="w-full bg-[var(--color-bg)] rounded-[24px] px-4 py-2 flex items-end gap-2 border-2 border-transparent focus-within:border-[var(--color-primary)]">
+      <form onSubmit={handleSubmit} className="flex-1 flex items-end gap-2">
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
+          placeholder="Сообщение..."
+          rows={1}
+          className="w-full min-h-[24px] max-h-[200px] resize-none border-0 bg-transparent py-3 text-base outline-none placeholder:opacity-50"
+          disabled={loading}
+        />
+        <button
+          type="submit"
+          disabled={loading || !input.trim()}
+          className="h-10 w-10 shrink-0 rounded-full bg-[var(--color-primary)] flex items-center justify-center text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--color-primary-hover)] active:scale-95"
+          aria-label="Отправить"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        </button>
+      </form>
+    </div>
+  );
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="h-16 flex-shrink-0 flex items-center justify-between px-4 md:px-6 bg-[var(--color-surface)] border-b border-[rgba(42,91,111,0.1)]">
@@ -101,6 +125,9 @@ export default function ChatPage() {
                   {label}
                 </button>
               ))}
+            </div>
+            <div className="mt-8 flex justify-center text-left w-full max-w-[600px] mx-auto">
+              {inputBlock}
             </div>
           </div>
         )}
@@ -147,29 +174,13 @@ export default function ChatPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="input-area">
-        <div className="max-w-[800px] mx-auto bg-[var(--color-bg)] rounded-[24px] px-4 py-2 flex items-end gap-2 border-2 border-transparent focus-within:border-[var(--color-primary)]">
-          <form onSubmit={handleSubmit} className="flex-1 flex items-end gap-2">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
-              placeholder="Сообщение..."
-              rows={1}
-              className="w-full min-h-[24px] max-h-[200px] resize-none border-0 bg-transparent py-3 text-base outline-none placeholder:opacity-50"
-              disabled={loading}
-            />
-            <button
-              type="submit"
-              disabled={loading || !input.trim()}
-              className="h-10 w-10 shrink-0 rounded-full bg-[var(--color-primary)] flex items-center justify-center text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--color-primary-hover)] active:scale-95"
-              aria-label="Отправить"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-            </button>
-          </form>
+      {hasMessages && (
+        <div className="input-area">
+          <div className="max-w-[800px] mx-auto w-full">
+            {inputBlock}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
