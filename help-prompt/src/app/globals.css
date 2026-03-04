@@ -48,10 +48,10 @@ body {
     background-color: var(--color-surface);
     border-bottom-color: rgba(42, 91, 111, 0.1);
   }
-  /* На вебе — отступ сверху с запасом, чтобы текст не уходил за хидер при скролле */
+  /* На вебе — зазор между хидером и чатом, текст не уходит за хидер */
   .messages-area {
-    padding-top: calc(var(--header-height) + 8px);
-    height: calc(100vh - var(--header-height) - 88px);
+    padding-top: calc(var(--header-height) + 24px);
+    height: calc(100vh - var(--header-height) - 104px);
   }
 }
 
