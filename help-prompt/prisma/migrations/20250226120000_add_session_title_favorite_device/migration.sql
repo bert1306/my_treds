@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Session" ADD COLUMN "title" TEXT;
+ALTER TABLE "Session" ADD COLUMN "isFavorite" BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE "Session" ADD COLUMN "deviceId" TEXT;

@@ -1,8 +1,21 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+
+const DEVICE_ID_KEY = "help-prompt-device-id";
+
+function getDeviceId(): string {
+  if (typeof window === "undefined") return "";
+  let id = localStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID?.() ?? `dev-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(DEVICE_ID_KEY, id);
+  }
+  return id;
+}
 
 type Message = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
+type SessionItem = { id: string; title: string; isFavorite: boolean; createdAt: string };
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -10,9 +23,34 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [headerOpaque, setHeaderOpaque] = useState(false);
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [dialogsOpen, setDialogsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [deviceId, setDeviceId] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    setDeviceId(getDeviceId());
+  }, []);
+
+  const fetchSessions = useCallback(async () => {
+    const id = deviceId || getDeviceId();
+    if (!id) return;
+    try {
+      const res = await fetch(`/api/sessions?deviceId=${encodeURIComponent(id)}`);
+      const data = (await res.json()) as { sessions?: SessionItem[] };
+      setSessions(data.sessions ?? []);
+    } catch {
+      setSessions([]);
+    }
+  }, [deviceId]);
+
+  useEffect(() => {
+    if (deviceId) fetchSessions();
+  }, [deviceId, fetchSessions]);
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
@@ -20,7 +58,6 @@ export default function ChatPage() {
     if (messages.length) scrollToBottom();
   }, [messages]);
 
-  /* На мобильном нет hover — делаем шапку непрозрачной при скролле */
   useEffect(() => {
     const el = areaRef.current;
     if (!el) return;
@@ -30,7 +67,6 @@ export default function ChatPage() {
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
-  /** Максимальная высота поля ввода — до половины экрана, но не больше 400px */
   const getInputMaxHeight = () => Math.min(typeof window !== "undefined" ? window.innerHeight * 0.5 : 400, 400);
 
   function adjustTextareaHeight() {
@@ -45,9 +81,7 @@ export default function ChatPage() {
   }
 
   useEffect(() => {
-    const t = requestAnimationFrame(() => {
-      adjustTextareaHeight();
-    });
+    const t = requestAnimationFrame(() => adjustTextareaHeight);
     return () => cancelAnimationFrame(t);
   }, [input]);
 
@@ -72,6 +106,7 @@ export default function ChatPage() {
     e.preventDefault();
     const text = input.trim();
     if (!text || loading) return;
+    const devId = deviceId || getDeviceId();
     setInput("");
     const userMsg: Message = {
       id: `u-${Date.now()}`,
@@ -85,10 +120,13 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, sessionId }),
+        body: JSON.stringify({ message: text, sessionId, deviceId: devId }),
       });
       const data = (await res.json()) as { reply?: string; sessionId?: string };
-      if (data.sessionId) setSessionId(data.sessionId);
+      if (data.sessionId) {
+        setSessionId(data.sessionId);
+        fetchSessions();
+      }
       const reply: Message = {
         id: `a-${Date.now()}`,
         role: "assistant",
@@ -111,8 +149,137 @@ export default function ChatPage() {
   function goToMainMenu() {
     setMessages([]);
     setSessionId(null);
+    setDialogsOpen(false);
     areaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
+
+  async function openDialog(id: string) {
+    setDialogsOpen(false);
+    try {
+      const res = await fetch(`/api/sessions/${id}/messages`);
+      const data = (await res.json()) as { messages?: Message[] };
+      const list = (data.messages ?? []).map((m) => ({
+        ...m,
+        role: m.role as "user" | "assistant",
+      }));
+      setSessionId(id);
+      setMessages(list);
+    } catch {
+      setMessages([]);
+    }
+  }
+
+  async function toggleFavorite(s: SessionItem, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await fetch(`/api/sessions/${s.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isFavorite: !s.isFavorite }),
+      });
+      fetchSessions();
+    } catch {}
+  }
+
+  function startRename(s: SessionItem, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditingId(s.id);
+    setEditTitle(s.title);
+  }
+
+  async function submitRename() {
+    if (!editingId) return;
+    const title = editTitle.trim() || "Без названия";
+    try {
+      await fetch(`/api/sessions/${editingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      fetchSessions();
+    } catch {}
+    setEditingId(null);
+    setEditTitle("");
+  }
+
+  async function deleteDialog(id: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm("Удалить этот диалог?")) return;
+    try {
+      await fetch(`/api/sessions/${id}`, { method: "DELETE" });
+      if (sessionId === id) goToMainMenu();
+      fetchSessions();
+      setDialogsOpen(false);
+    } catch {}
+  }
+
+  const dialogsList = (
+    <div className="flex flex-col h-full">
+      <div className="p-2 border-b border-[rgba(42,91,111,0.1)] flex items-center justify-between shrink-0">
+        <span className="font-semibold text-[var(--color-secondary)] text-sm">Диалоги</span>
+        <button
+          type="button"
+          onClick={() => setDialogsOpen(false)}
+          className="md:hidden p-2 rounded-lg text-[var(--color-secondary)] hover:bg-[rgba(42,91,111,0.08)]"
+          aria-label="Закрыть"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <ul className="flex-1 overflow-y-auto p-2 space-y-1">
+        {sessions.length === 0 && (
+          <li className="text-sm text-[var(--color-text-muted)] py-4 text-center">Пока нет сохранённых диалогов</li>
+        )}
+        {sessions.map((s) => (
+          <li key={s.id} className="group relative">
+            {editingId === s.id ? (
+              <div className="flex items-center gap-1 p-2 rounded-xl bg-[var(--color-bg)]">
+                <input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") submitRename(); if (e.key === "Escape") { setEditingId(null); setEditTitle(""); } }}
+                  className="flex-1 min-w-0 text-sm border border-[var(--color-input-border)] rounded-lg px-2 py-1.5 outline-none focus:border-[var(--color-primary)]"
+                  autoFocus
+                />
+                <button type="button" onClick={submitRename} className="text-xs px-2 py-1 rounded bg-[var(--color-primary)] text-white">Ок</button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => openDialog(s.id)}
+                className={`w-full text-left p-3 rounded-xl transition flex items-center gap-2 ${sessionId === s.id ? "bg-[var(--color-primary)]/20 border border-[var(--color-primary)]" : "hover:bg-[rgba(42,91,111,0.06)]"}`}
+              >
+                <button
+                  type="button"
+                  onClick={(e) => toggleFavorite(s, e)}
+                  className="shrink-0 p-0.5 rounded opacity-70 hover:opacity-100"
+                  aria-label={s.isFavorite ? "Убрать из избранного" : "В избранное"}
+                  title={s.isFavorite ? "Убрать из избранного" : "В избранное"}
+                >
+                  {s.isFavorite ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  )}
+                </button>
+                <span className="flex-1 min-w-0 truncate text-sm text-[var(--color-secondary)]">{s.title}</span>
+                <span className="text-[10px] text-[var(--color-text-muted)] shrink-0">
+                  {new Date(s.createdAt).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}
+                </span>
+                <div className="flex shrink-0 gap-0.5">
+                  <button type="button" onClick={(e) => startRename(s, e)} className="p-1 rounded text-[var(--color-secondary)] hover:bg-[rgba(42,91,111,0.1)]" title="Переименовать" aria-label="Переименовать">✎</button>
+                  <button type="button" onClick={(e) => deleteDialog(s.id, e)} className="p-1 rounded text-red-600 hover:bg-red-50" title="Удалить" aria-label="Удалить">×</button>
+                </div>
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 
   const inputBlock = (
     <div className="w-full min-w-0 bg-[var(--color-bg)] rounded-[24px] px-3 sm:px-4 py-2 flex items-end gap-2 border-2 border-[var(--color-input-border)] focus-within:border-[var(--color-primary)] transition-colors">
@@ -141,117 +308,148 @@ export default function ChatPage() {
   );
 
   return (
-    <div className="h-dvh min-h-screen flex flex-col overflow-hidden">
-      <header
-          className={`header-bar fixed top-0 left-0 right-0 flex-shrink-0 flex items-center justify-between px-4 md:px-6 z-20 transition-[background-color,border-color] duration-200 ${headerOpaque ? "header-bar-opaque" : ""}`}
+    <div className="h-dvh min-h-screen flex overflow-hidden">
+      {/* Десктоп: боковая панель диалогов */}
+      <aside
+        className="dialogs-sidebar hidden md:flex flex-col w-60 shrink-0 h-dvh border-r border-[rgba(42,91,111,0.1)] bg-[var(--color-surface)]"
+        style={{ paddingTop: "var(--header-height)" }}
+      >
+        {dialogsList}
+      </aside>
+
+      {/* Мобильный: оверлей со списком диалогов */}
+      {dialogsOpen && (
+        <div className="fixed inset-0 z-30 md:hidden bg-black/40" onClick={() => setDialogsOpen(false)} aria-hidden>
+          <div
+            className="absolute inset-y-0 left-0 w-[min(100%,320px)] bg-[var(--color-surface)] shadow-xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {dialogsList}
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <header
+          className={`header-bar fixed top-0 left-0 right-0 md:left-60 flex-shrink-0 flex items-center justify-between px-4 md:px-6 z-20 transition-[background-color,border-color] duration-200 ${headerOpaque ? "header-bar-opaque" : ""}`}
         >
-        <div className="flex items-center gap-3">
-          {hasMessages && (
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setDialogsOpen((o) => !o)}
+              className="md:hidden p-2 rounded-xl text-[var(--color-secondary)] hover:bg-[rgba(42,91,111,0.08)]"
+              aria-label="Диалоги"
+              title="Диалоги"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
+            {hasMessages && (
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); goToMainMenu(); }}
+                className="hidden md:flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-medium text-[var(--color-secondary)] hover:bg-[rgba(42,91,111,0.08)] transition cursor-pointer"
+                title="В главное меню"
+                aria-label="В главное меню"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                <span className="hidden sm:inline">В меню</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); goToMainMenu(); }}
-              className="flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-medium text-[var(--color-secondary)] hover:bg-[rgba(42,91,111,0.08)] transition cursor-pointer"
-              title="В главное меню"
-              aria-label="В главное меню"
+              className="text-lg font-semibold text-[var(--color-secondary)] hover:opacity-80 transition-opacity cursor-pointer"
+              title="На главную"
+              aria-label="На главную"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-              <span className="hidden sm:inline">В меню</span>
+              Help Prompt
             </button>
-          )}
-          <button
-            type="button"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); goToMainMenu(); }}
-            className="text-lg font-semibold text-[var(--color-secondary)] hover:opacity-80 transition-opacity cursor-pointer"
-            title="На главную"
-            aria-label="На главную"
-          >
-            Help Prompt
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          {hasMessages && (
-            <button
-              type="button"
-              onClick={(e) => { e.preventDefault(); goToMainMenu(); }}
-              className="rounded-xl px-3 py-1.5 text-sm font-medium text-[var(--color-secondary)] hover:bg-[rgba(42,91,111,0.08)] cursor-pointer"
-            >
-              Новый чат
-            </button>
-          )}
-        </div>
-      </header>
+          </div>
+          <div className="flex items-center gap-2">
+            {hasMessages && (
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); goToMainMenu(); }}
+                className="rounded-xl px-3 py-1.5 text-sm font-medium text-[var(--color-secondary)] hover:bg-[rgba(42,91,111,0.08)] cursor-pointer"
+              >
+                Новый чат
+              </button>
+            )}
+          </div>
+        </header>
 
-      <div ref={areaRef} className="messages-area flex-1 min-h-0">
-        {!hasMessages && !loading && (
-          <div className="max-w-[600px] mx-auto py-10 px-6 text-center">
-            <h1 className="text-3xl font-semibold text-[var(--color-secondary)] mb-8">Чем могу помочь?</h1>
-            <div className="grid grid-cols-2 gap-3">
-              {["Расскажи про тренды 2026", "Помоги сформулировать задачу", "Идеи для проекта", "Краткое резюме"].map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => setInput(label)}
-                  className="rounded-2xl bg-[var(--color-surface)] p-4 text-left text-sm text-[var(--color-secondary)] shadow-[var(--shadow-sm)] hover:border-2 hover:border-[var(--color-primary)] hover:-translate-y-0.5 transition"
-                >
-                  {label}
-                </button>
-              ))}
+        <div ref={areaRef} className="messages-area flex-1 min-h-0">
+          {!hasMessages && !loading && (
+            <div className="max-w-[600px] mx-auto py-10 px-6 text-center">
+              <h1 className="text-3xl font-semibold text-[var(--color-secondary)] mb-8">Чем могу помочь?</h1>
+              <div className="grid grid-cols-2 gap-3">
+                {["Расскажи про тренды 2026", "Помоги сформулировать задачу", "Идеи для проекта", "Краткое резюме"].map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setInput(label)}
+                    className="rounded-2xl bg-[var(--color-surface)] p-4 text-left text-sm text-[var(--color-secondary)] shadow-[var(--shadow-sm)] hover:border-2 hover:border-[var(--color-primary)] hover:-translate-y-0.5 transition"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-8 flex justify-center text-left w-full max-w-[600px] mx-auto">
+                {inputBlock}
+              </div>
             </div>
-            <div className="mt-8 flex justify-center text-left w-full max-w-[600px] mx-auto">
+          )}
+
+          {messages.map((m) => (
+            <div
+              key={m.id}
+              className={`flex gap-3 max-w-[800px] mx-auto mb-4 ${m.role === "user" ? "flex-row-reverse" : ""}`}
+            >
+              <div
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
+                  m.role === "user" ? "bg-[var(--color-secondary)] text-white" : "bg-[var(--color-primary)] text-white"
+                }`}
+              >
+                {m.role === "user" ? "Я" : "◆"}
+              </div>
+              <div className={`flex flex-col max-w-[85%] ${m.role === "user" ? "items-end" : "items-start"}`}>
+                <div
+                  className={`bubble rounded-[18px] px-5 py-4 shadow-[var(--shadow-sm)] ${
+                    m.role === "user"
+                      ? "bg-[var(--color-primary)] text-[var(--color-text-inverse)]"
+                      : "bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap text-base leading-relaxed">{m.content}</p>
+                </div>
+                <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                  {new Date(m.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex gap-3 max-w-[800px] mx-auto mb-4">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-white">◆</div>
+              <div className="rounded-[18px] bg-[var(--color-surface)] px-5 py-4 shadow-[var(--shadow-sm)] flex gap-1.5">
+                <span className="typing-dot h-2 w-2 rounded-full bg-[var(--color-primary)]" style={{ animationDelay: "0ms" }} />
+                <span className="typing-dot h-2 w-2 rounded-full bg-[var(--color-primary)]" style={{ animationDelay: "150ms" }} />
+                <span className="typing-dot h-2 w-2 rounded-full bg-[var(--color-primary)]" style={{ animationDelay: "300ms" }} />
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {hasMessages && (
+          <div className="input-area">
+            <div className="max-w-[800px] mx-auto w-full">
               {inputBlock}
             </div>
           </div>
         )}
-
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`flex gap-3 max-w-[800px] mx-auto mb-4 ${m.role === "user" ? "flex-row-reverse" : ""}`}
-          >
-            <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
-                m.role === "user" ? "bg-[var(--color-secondary)] text-white" : "bg-[var(--color-primary)] text-white"
-              }`}
-            >
-              {m.role === "user" ? "Я" : "◆"}
-            </div>
-            <div className={`flex flex-col max-w-[85%] ${m.role === "user" ? "items-end" : "items-start"}`}>
-              <div
-                className={`bubble rounded-[18px] px-5 py-4 shadow-[var(--shadow-sm)] ${
-                  m.role === "user"
-                    ? "bg-[var(--color-primary)] text-[var(--color-text-inverse)]"
-                    : "bg-[var(--color-surface)] text-[var(--color-text-primary)]"
-                }`}
-              >
-                <p className="whitespace-pre-wrap text-base leading-relaxed">{m.content}</p>
-              </div>
-              <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
-                {new Date(m.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
-              </p>
-            </div>
-          </div>
-        ))}
-
-        {loading && (
-          <div className="flex gap-3 max-w-[800px] mx-auto mb-4">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-white">◆</div>
-            <div className="rounded-[18px] bg-[var(--color-surface)] px-5 py-4 shadow-[var(--shadow-sm)] flex gap-1.5">
-              <span className="typing-dot h-2 w-2 rounded-full bg-[var(--color-primary)]" style={{ animationDelay: "0ms" }} />
-              <span className="typing-dot h-2 w-2 rounded-full bg-[var(--color-primary)]" style={{ animationDelay: "150ms" }} />
-              <span className="typing-dot h-2 w-2 rounded-full bg-[var(--color-primary)]" style={{ animationDelay: "300ms" }} />
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
       </div>
-
-      {hasMessages && (
-        <div className="input-area">
-          <div className="max-w-[800px] mx-auto w-full">
-            {inputBlock}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

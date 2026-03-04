@@ -10,7 +10,14 @@ export async function POST(req: NextRequest) {
     const text = body.message.trim();
     if (!text) return NextResponse.json({ error: "message empty" }, { status: 400 });
 
+    const deviceId = (body.deviceId as string)?.trim() || null;
     let sessionId = body.sessionId as string | undefined;
+    if (sessionId && deviceId) {
+      await prisma.session.updateMany({
+        where: { id: sessionId, deviceId: null },
+        data: { deviceId },
+      });
+    }
     if (!sessionId) {
       const user = await prisma.user.findFirst();
       let userId: string;
@@ -20,8 +27,9 @@ export async function POST(req: NextRequest) {
         const u = await prisma.user.create({ data: { name: "Guest" } });
         userId = u.id;
       }
+      const title = text.length > 60 ? `${text.slice(0, 57)}...` : text;
       const session = await prisma.session.create({
-        data: { userId, channel: "web" },
+        data: { userId, channel: "web", deviceId, title },
       });
       sessionId = session.id;
     }
