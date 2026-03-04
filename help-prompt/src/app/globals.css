@@ -9,6 +9,8 @@
   --color-text-primary: #2a5b6f;
   --color-text-inverse: #ffffff;
   --color-text-muted: rgba(42, 91, 111, 0.5);
+  /* Рамка поля ввода: заметная, в тоне темы (приглушённый secondary) */
+  --color-input-border: rgba(42, 91, 111, 0.22);
   --radius-lg: 18px;
   --radius-xl: 24px;
   --shadow-sm: 0 1px 2px rgba(42, 91, 111, 0.06);
@@ -26,6 +28,19 @@ body {
   color: var(--color-text-primary);
   font-family: system-ui, -apple-system, sans-serif;
   line-height: 1.5;
+}
+
+/* Верхнее меню: закреплено, по умолчанию прозрачное; при наведении или при скролле (мобильный) — непрозрачное */
+.header-bar {
+  min-height: calc(4rem + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+  background-color: transparent;
+  border-bottom: 1px solid transparent;
+}
+.header-bar:hover,
+.header-bar-opaque {
+  background-color: var(--color-surface);
+  border-bottom-color: rgba(42, 91, 111, 0.1);
 }
 
 .messages-area {
@@ -65,6 +80,32 @@ body {
   right: 0;
   background: var(--color-surface);
   border-top: 1px solid rgba(42, 91, 111, 0.1);
-  padding: 16px 20px 24px;
+  padding-top: 16px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
   box-shadow: 0 -4px 20px rgba(42, 91, 111, 0.05);
+}
+@media (min-width: 640px) {
+  .input-area {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+/* Поле ввода: на мобильном текст не обрезается, переносится по словам */
+.help-prompt-input-wrap {
+  min-width: 0;
+}
+.help-prompt-input-wrap textarea {
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.help-prompt-textarea {
+  max-height: min(50vh, 400px);
+  overflow-y: auto;
 }

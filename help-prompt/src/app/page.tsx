@@ -9,14 +9,64 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [headerOpaque, setHeaderOpaque] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
   useEffect(() => {
     if (messages.length) scrollToBottom();
   }, [messages]);
+
+  /* На мобильном нет hover — делаем шапку непрозрачной при скролле */
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const onScroll = () => setHeaderOpaque(el.scrollTop > 24);
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  /** Максимальная высота поля ввода — до половины экрана, но не больше 400px */
+  const getInputMaxHeight = () => Math.min(typeof window !== "undefined" ? window.innerHeight * 0.5 : 400, 400);
+
+  function adjustTextareaHeight() {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const maxH = getInputMaxHeight();
+    ta.style.maxHeight = `${maxH}px`;
+    ta.style.height = "auto";
+    const h = Math.min(ta.scrollHeight, maxH);
+    ta.style.height = `${h}px`;
+    ta.style.overflowY = h >= maxH ? "auto" : "hidden";
+  }
+
+  useEffect(() => {
+    const t = requestAnimationFrame(() => {
+      adjustTextareaHeight();
+    });
+    return () => cancelAnimationFrame(t);
+  }, [input]);
+
+  useEffect(() => {
+    const onResize = () => adjustTextareaHeight();
+    window.addEventListener("resize", onResize);
+    const vv = typeof window !== "undefined" && window.visualViewport;
+    if (vv) {
+      vv.addEventListener("resize", onResize);
+      vv.addEventListener("scroll", onResize);
+    }
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (vv) {
+        vv.removeEventListener("resize", onResize);
+        vv.removeEventListener("scroll", onResize);
+      }
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -65,15 +115,17 @@ export default function ChatPage() {
   }
 
   const inputBlock = (
-    <div className="w-full bg-[var(--color-bg)] rounded-[24px] px-4 py-2 flex items-end gap-2 border-2 border-transparent focus-within:border-[var(--color-primary)]">
-      <form onSubmit={handleSubmit} className="flex-1 flex items-end gap-2">
+    <div className="w-full min-w-0 bg-[var(--color-bg)] rounded-[24px] px-3 sm:px-4 py-2 flex items-end gap-2 border-2 border-[var(--color-input-border)] focus-within:border-[var(--color-primary)] transition-colors">
+      <form onSubmit={handleSubmit} className="help-prompt-input-wrap flex-1 min-w-0 flex items-end gap-2">
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onFocus={() => setTimeout(adjustTextareaHeight, 100)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
           placeholder="Сообщение..."
           rows={1}
-          className="w-full min-h-[24px] max-h-[200px] resize-none border-0 bg-transparent py-3 text-base outline-none placeholder:opacity-50"
+          className="help-prompt-textarea w-full min-w-0 min-h-[44px] resize-none border-0 bg-transparent py-3 text-base outline-none placeholder:opacity-50"
           disabled={loading}
         />
         <button
@@ -89,8 +141,10 @@ export default function ChatPage() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="h-16 flex-shrink-0 flex items-center justify-between px-4 md:px-6 bg-[var(--color-surface)] border-b border-[rgba(42,91,111,0.1)] relative z-10">
+    <div className="h-dvh min-h-screen flex flex-col overflow-hidden">
+      <header
+          className={`header-bar fixed top-0 left-0 right-0 flex-shrink-0 flex items-center justify-between px-4 md:px-6 z-20 transition-[background-color,border-color] duration-200 ${headerOpaque ? "header-bar-opaque" : ""}`}
+        >
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -117,7 +171,7 @@ export default function ChatPage() {
         </div>
       </header>
 
-      <div ref={areaRef} className="messages-area flex-1">
+      <div ref={areaRef} className="messages-area flex-1 min-h-0 pt-[calc(4rem+env(safe-area-inset-top))]">
         {!hasMessages && !loading && (
           <div className="max-w-[600px] mx-auto py-10 px-6 text-center">
             <h1 className="text-3xl font-semibold text-[var(--color-secondary)] mb-8">Чем могу помочь?</h1>
