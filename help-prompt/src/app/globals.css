@@ -30,7 +30,7 @@ body {
   line-height: 1.5;
 }
 
-/* Верхнее меню: закреплено, по умолчанию прозрачное; при наведении или при скролле (мобильный) — непрозрачное */
+/* Верхнее меню: закреплено. На мобильном — прозрачное, при наведении/скролле непрозрачное; на вебе — всегда непрозрачное */
 .header-bar {
   min-height: calc(4rem + env(safe-area-inset-top));
   padding-top: env(safe-area-inset-top);
@@ -41,6 +41,12 @@ body {
 .header-bar-opaque {
   background-color: var(--color-surface);
   border-bottom-color: rgba(42, 91, 111, 0.1);
+}
+@media (min-width: 768px) {
+  .header-bar {
+    background-color: var(--color-surface);
+    border-bottom-color: rgba(42, 91, 111, 0.1);
+  }
 }
 
 .messages-area {
