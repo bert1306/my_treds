@@ -11,6 +11,8 @@
   --color-text-muted: rgba(42, 91, 111, 0.5);
   /* Рамка поля ввода: заметная, в тоне темы (приглушённый secondary) */
   --color-input-border: rgba(42, 91, 111, 0.22);
+  --color-danger: #c45c5c;
+  --color-danger-hover: #b05050;
   --radius-lg: 18px;
   --radius-xl: 24px;
   --shadow-sm: 0 1px 2px rgba(42, 91, 111, 0.06);

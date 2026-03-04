@@ -27,6 +27,7 @@ export default function ChatPage() {
   const [dialogsOpen, setDialogsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -204,10 +205,16 @@ export default function ChatPage() {
     setEditTitle("");
   }
 
-  async function deleteDialog(id: string, e: React.MouseEvent) {
+  function requestDeleteDialog(id: string, e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm("Удалить этот диалог?")) return;
+    setDeleteConfirmId(id);
+  }
+
+  async function confirmDelete() {
+    const id = deleteConfirmId;
+    if (!id) return;
+    setDeleteConfirmId(null);
     try {
       await fetch(`/api/sessions/${id}`, { method: "DELETE" });
       if (sessionId === id) goToMainMenu();
@@ -271,7 +278,7 @@ export default function ChatPage() {
                 </span>
                 <div className="flex shrink-0 gap-0.5">
                   <button type="button" onClick={(e) => startRename(s, e)} className="p-1 rounded text-[var(--color-secondary)] hover:bg-[rgba(42,91,111,0.1)]" title="Переименовать" aria-label="Переименовать">✎</button>
-                  <button type="button" onClick={(e) => deleteDialog(s.id, e)} className="p-1 rounded text-red-600 hover:bg-red-50" title="Удалить" aria-label="Удалить">×</button>
+                  <button type="button" onClick={(e) => requestDeleteDialog(s.id, e)} className="p-1 rounded text-red-600 hover:bg-red-50" title="Удалить" aria-label="Удалить">×</button>
                 </div>
               </button>
             )}
@@ -325,6 +332,45 @@ export default function ChatPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {dialogsList}
+          </div>
+        </div>
+      )}
+
+      {/* Модалка подтверждения удаления диалога */}
+      {deleteConfirmId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30"
+          onClick={() => setDeleteConfirmId(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-dialog-title"
+        >
+          <div
+            className="confirm-modal w-full max-w-sm bg-[var(--color-surface)] rounded-[var(--radius-xl)] shadow-[var(--shadow-md)] border border-[rgba(42,91,111,0.1)] p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="delete-dialog-title" className="text-lg font-semibold text-[var(--color-secondary)] mb-2">
+              Удалить диалог?
+            </h2>
+            <p className="text-sm text-[var(--color-text-muted)] mb-6">
+              Это действие нельзя отменить.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmId(null)}
+                className="px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--color-secondary)] bg-[var(--color-bg)] hover:bg-[rgba(42,91,111,0.08)] transition"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] transition"
+              >
+                Удалить
+              </button>
+            </div>
           </div>
         </div>
       )}
