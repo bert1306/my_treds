@@ -146,17 +146,27 @@ export default function ChatPage() {
           className={`header-bar fixed top-0 left-0 right-0 flex-shrink-0 flex items-center justify-between px-4 md:px-6 z-20 transition-[background-color,border-color] duration-200 ${headerOpaque ? "header-bar-opaque" : ""}`}
         >
         <div className="flex items-center gap-3">
+          {hasMessages && (
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); goToMainMenu(); }}
+              className="flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-medium text-[var(--color-secondary)] hover:bg-[rgba(42,91,111,0.08)] transition cursor-pointer"
+              title="В главное меню"
+              aria-label="В главное меню"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              <span className="hidden sm:inline">В меню</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); goToMainMenu(); }}
-            className="flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-medium text-[var(--color-secondary)] hover:bg-[rgba(42,91,111,0.08)] transition cursor-pointer"
-            title="В главное меню"
-            aria-label="В главное меню"
+            className="text-lg font-semibold text-[var(--color-secondary)] hover:opacity-80 transition-opacity cursor-pointer"
+            title="На главную"
+            aria-label="На главную"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-            <span className="hidden sm:inline">В меню</span>
+            Help Prompt
           </button>
-          <span className="text-lg font-semibold text-[var(--color-secondary)]">Help Prompt</span>
         </div>
         <div className="flex items-center gap-2">
           {hasMessages && (
