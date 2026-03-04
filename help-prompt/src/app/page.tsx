@@ -181,7 +181,7 @@ export default function ChatPage() {
         </div>
       </header>
 
-      <div ref={areaRef} className="messages-area flex-1 min-h-0 pt-[calc(4rem+env(safe-area-inset-top))]">
+      <div ref={areaRef} className="messages-area flex-1 min-h-0">
         {!hasMessages && !loading && (
           <div className="max-w-[600px] mx-auto py-10 px-6 text-center">
             <h1 className="text-3xl font-semibold text-[var(--color-secondary)] mb-8">Чем могу помочь?</h1>

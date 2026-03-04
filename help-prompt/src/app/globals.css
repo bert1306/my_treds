@@ -16,6 +16,7 @@
   --shadow-sm: 0 1px 2px rgba(42, 91, 111, 0.06);
   --shadow-md: 0 4px 12px rgba(42, 91, 111, 0.08);
   --transition: 0.2s ease-out;
+  --header-height: calc(4rem + env(safe-area-inset-top));
 }
 
 @theme inline {
@@ -32,7 +33,7 @@ body {
 
 /* Верхнее меню: закреплено. На мобильном — прозрачное, при наведении/скролле непрозрачное; на вебе — всегда непрозрачное */
 .header-bar {
-  min-height: calc(4rem + env(safe-area-inset-top));
+  min-height: var(--header-height);
   padding-top: env(safe-area-inset-top);
   background-color: transparent;
   border-bottom: 1px solid transparent;
@@ -47,13 +48,18 @@ body {
     background-color: var(--color-surface);
     border-bottom-color: rgba(42, 91, 111, 0.1);
   }
+  /* На вебе — отступ сверху с запасом, чтобы текст не уходил за хидер при скролле */
+  .messages-area {
+    padding-top: calc(var(--header-height) + 8px);
+    height: calc(100vh - var(--header-height) - 88px);
+  }
 }
 
 .messages-area {
   max-width: 800px;
   margin: 0 auto;
-  padding: 24px 20px 120px;
-  height: calc(100vh - 64px - 80px);
+  padding: var(--header-height) 20px 120px;
+  height: calc(100vh - var(--header-height) - 80px);
   overflow-y: auto;
   scroll-behavior: smooth;
   scrollbar-width: thin;
