@@ -17,16 +17,28 @@ model User {
 }
 
 model Session {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  channel    String    @default("web")
-  title      String?   // название диалога (переименовывается пользователем)
-  isFavorite Boolean   @default(false)
-  deviceId   String?   // привязка к устройству/сессии в web; позже — telegramId и др.
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  messages   Message[]
+  id            String         @id @default(cuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel       String         @default("web")
+  title         String?        // название диалога (переименовывается пользователем)
+  isFavorite    Boolean        @default(false)
+  deviceId      String?        // привязка к устройству/сессии в web; позже — telegramId и др.
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  messages      Message[]
+  collectedData CollectedData[]
+}
+
+model CollectedData {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  key       String   // ключ поля (goal, goalDetail, role, detailLevel, context)
+  value     String   // значение (текст)
+  createdAt DateTime @default(now())
+  @@unique([sessionId, key])
+  @@index([sessionId])
 }
 
 model Message {

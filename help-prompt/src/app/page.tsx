@@ -17,6 +17,20 @@ function getDeviceId(): string {
 type Message = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
 type SessionItem = { id: string; title: string; isFavorite: boolean; createdAt: string };
 
+type WizardStepData = {
+  stepIndex: number;
+  type: "choice" | "text";
+  question: string;
+  dataKey: string;
+  options?: { label: string; value: string }[];
+  optional?: boolean;
+};
+
+type WizardState =
+  | null
+  | { completed: true }
+  | { completed: false; step: WizardStepData };
+
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -29,6 +43,9 @@ export default function ChatPage() {
   const [editTitle, setEditTitle] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState("");
+  const [wizardStep, setWizardStep] = useState<WizardState>(null);
+  const [wizardLoading, setWizardLoading] = useState(false);
+  const [wizardInput, setWizardInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -52,6 +69,35 @@ export default function ChatPage() {
   useEffect(() => {
     if (deviceId) fetchSessions();
   }, [deviceId, fetchSessions]);
+
+  // Мастер: загрузить текущий шаг, когда есть сессия и нет сообщений
+  useEffect(() => {
+    if (!sessionId || messages.length > 0) {
+      setWizardStep(null);
+      return;
+    }
+    let cancelled = false;
+    setWizardStep(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}/wizard/step`);
+        const data = (await res.json()) as { completed?: boolean; step?: WizardStepData };
+        if (cancelled) return;
+        if (data.completed) {
+          setWizardStep({ completed: true });
+        } else if (data.step) {
+          setWizardStep({ completed: false, step: data.step });
+        } else {
+          setWizardStep({ completed: true });
+        }
+      } catch {
+        if (!cancelled) setWizardStep({ completed: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, messages.length]);
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
@@ -150,8 +196,55 @@ export default function ChatPage() {
   function goToMainMenu() {
     setMessages([]);
     setSessionId(null);
+    setWizardStep(null);
+    setWizardInput("");
     setDialogsOpen(false);
     areaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /** Создать пустую сессию и показать мастер (настройка перед чатом) */
+  async function startWizard() {
+    const devId = deviceId || getDeviceId();
+    if (!devId) return;
+    setWizardLoading(true);
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId: devId }),
+      });
+      const data = (await res.json()) as { sessionId?: string };
+      if (data.sessionId) {
+        setSessionId(data.sessionId);
+        setMessages([]);
+        setWizardInput("");
+        fetchSessions();
+      }
+    } finally {
+      setWizardLoading(false);
+    }
+  }
+
+  async function submitWizardStep(value: string) {
+    if (!sessionId || !wizardStep || wizardStep.completed) return;
+    setWizardLoading(true);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/wizard/step`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value }),
+      });
+      const data = (await res.json()) as { completed?: boolean; step?: WizardStepData };
+      if (data.completed) {
+        setWizardStep({ completed: true });
+        setWizardInput("");
+      } else if (data.step) {
+        setWizardStep({ completed: false, step: data.step });
+        setWizardInput("");
+      }
+    } finally {
+      setWizardLoading(false);
+    }
   }
 
   async function openDialog(id: string) {
@@ -237,6 +330,16 @@ export default function ChatPage() {
         </button>
       </div>
       <ul className="flex-1 overflow-y-auto p-2 space-y-1">
+        <li className="mb-2">
+          <button
+            type="button"
+            onClick={() => { setDialogsOpen(false); startWizard(); }}
+            disabled={wizardLoading}
+            className="w-full rounded-xl px-3 py-2.5 text-sm font-medium text-[var(--color-primary)] border-2 border-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition disabled:opacity-60"
+          >
+            + Новый диалог
+          </button>
+        </li>
         {sessions.length === 0 && (
           <li className="text-sm text-[var(--color-text-muted)] py-4 text-center">Пока нет сохранённых диалогов</li>
         )}
@@ -425,9 +528,85 @@ export default function ChatPage() {
         </header>
 
         <div ref={areaRef} className="messages-area flex-1 min-h-0">
-          {!hasMessages && !loading && (
+          {/* Мастер: настройка перед чатом (5 шагов) */}
+          {wizardStep && !wizardStep.completed && wizardStep.step && (
+            <div className="max-w-[560px] mx-auto py-10 px-6">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  Шаг {wizardStep.step.stepIndex + 1} из 5
+                </p>
+                <button
+                  type="button"
+                  onClick={goToMainMenu}
+                  className="text-sm text-[var(--color-text-muted)] hover:text-[var(--color-secondary)]"
+                >
+                  Отменить
+                </button>
+              </div>
+              <h2 className="text-xl font-semibold text-[var(--color-secondary)] mb-6">
+                {wizardStep.step.question}
+              </h2>
+              {wizardStep.step.type === "choice" && wizardStep.step.options && (
+                <div className="flex flex-col gap-2">
+                  {wizardStep.step.options.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      disabled={wizardLoading}
+                      onClick={() => submitWizardStep(opt.value)}
+                      className="rounded-2xl bg-[var(--color-surface)] p-4 text-left text-sm font-medium text-[var(--color-secondary)] shadow-[var(--shadow-sm)] hover:border-2 hover:border-[var(--color-primary)] hover:-translate-y-0.5 transition disabled:opacity-60"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {wizardStep.step.type === "text" && (
+                <div className="space-y-3">
+                  <textarea
+                    value={wizardInput}
+                    onChange={(e) => setWizardInput(e.target.value)}
+                    placeholder="Введите контекст или оставьте пустым"
+                    rows={4}
+                    className="w-full rounded-2xl border-2 border-[var(--color-input-border)] bg-[var(--color-bg)] px-4 py-3 text-base text-[var(--color-secondary)] placeholder:opacity-50 focus:border-[var(--color-primary)] outline-none resize-y min-h-[100px]"
+                    disabled={wizardLoading}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={wizardLoading}
+                      onClick={() => submitWizardStep(wizardInput)}
+                      className="rounded-xl px-4 py-2.5 text-sm font-medium bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-60"
+                    >
+                      Далее
+                    </button>
+                    {wizardStep.step.optional && (
+                      <button
+                        type="button"
+                        disabled={wizardLoading}
+                        onClick={() => submitWizardStep("")}
+                        className="rounded-xl px-4 py-2.5 text-sm font-medium text-[var(--color-secondary)] bg-[var(--color-bg)] hover:bg-[rgba(42,91,111,0.08)] disabled:opacity-60"
+                      >
+                        Пропустить
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!hasMessages && !loading && (!wizardStep || wizardStep.completed) && (
             <div className="max-w-[600px] mx-auto py-10 px-6 text-center">
               <h1 className="text-3xl font-semibold text-[var(--color-secondary)] mb-8">Чем могу помочь?</h1>
+              <button
+                type="button"
+                onClick={startWizard}
+                disabled={wizardLoading}
+                className="mb-6 rounded-2xl bg-[var(--color-primary)]/10 border-2 border-[var(--color-primary)] px-5 py-3 text-sm font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition disabled:opacity-60"
+              >
+                {wizardLoading ? "Создаём диалог…" : "Настроить параметры (мастер)"}
+              </button>
               <div className="grid grid-cols-2 gap-3">
                 {["Расскажи про тренды 2026", "Помоги сформулировать задачу", "Идеи для проекта", "Краткое резюме"].map((label) => (
                   <button
