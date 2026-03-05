@@ -181,6 +181,36 @@ export const TOP_PRESETS: TopPreset[] = [
   { id: "summary", label: "Краткое резюме", goal: "improve", goalDetail: "resize" },
 ];
 
+/** Порядок пресетов по роли: релевантные для роли первыми. Без роли — общий топ (default). */
+const ROLE_PRESET_PRIORITY: Record<string, string[]> = {
+  developer: ["formulate", "ideas", "trends", "summary"],
+  pm: ["ideas", "formulate", "trends", "summary"],
+  analyst: ["trends", "formulate", "summary", "ideas"],
+  student: ["formulate", "summary", "ideas", "trends"],
+  marketer: ["ideas", "trends", "formulate", "summary"],
+  teacher: ["formulate", "summary", "ideas", "trends"],
+  other: ["formulate", "ideas", "trends", "summary"],
+  none: ["trends", "formulate", "ideas", "summary"],
+  default: ["trends", "formulate", "ideas", "summary"],
+};
+
+/** Топовые кнопки с учётом роли: если роль задана — порядок по ROLE_PRESET_PRIORITY, иначе общий топ. */
+export function getTopPresetsForRole(role: string | null | undefined): TopPreset[] {
+  const order = role && role in ROLE_PRESET_PRIORITY
+    ? ROLE_PRESET_PRIORITY[role]
+    : ROLE_PRESET_PRIORITY.default;
+  const byId = new Map(TOP_PRESETS.map((p) => [p.id, p]));
+  const result: TopPreset[] = [];
+  for (const id of order) {
+    const p = byId.get(id);
+    if (p) result.push(p);
+  }
+  for (const p of TOP_PRESETS) {
+    if (!result.includes(p)) result.push(p);
+  }
+  return result;
+}
+
 export function getPresetById(id: string): TopPreset | undefined {
   return TOP_PRESETS.find((p) => p.id === id);
 }

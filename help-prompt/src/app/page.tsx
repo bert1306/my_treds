@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { TOP_PRESETS } from "@/lib/wizard";
+import { getTopPresetsForRole } from "@/lib/wizard";
 
 const DEVICE_ID_KEY = "help-prompt-device-id";
 
@@ -49,6 +49,7 @@ export default function ChatPage() {
   const [wizardLoading, setWizardLoading] = useState(false);
   const [wizardInput, setWizardInput] = useState("");
   const [profileName, setProfileName] = useState("");
+  const [profileRole, setProfileRole] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -77,7 +78,10 @@ export default function ChatPage() {
     if (!deviceId) return;
     fetch(`/api/profile?deviceId=${encodeURIComponent(deviceId)}`)
       .then((res) => res.json())
-      .then((data: { name?: string }) => setProfileName(data.name?.trim() ?? ""))
+      .then((data: { name?: string; role?: string }) => {
+        setProfileName(data.name?.trim() ?? "");
+        setProfileRole(data.role?.trim() ?? null);
+      })
       .catch(() => {});
   }, [deviceId]);
 
@@ -669,10 +673,12 @@ export default function ChatPage() {
                 {wizardLoading ? "Создаём диалог…" : "Настроить параметры (мастер)"}
               </button>
               <p className="text-sm text-[var(--color-text-muted)] mb-3">
-                Топовые запросы — мастер донастроит под вас (останется выбрать роль и детализацию)
+                {profileRole
+                  ? "Топовые запросы для вашей роли — мастер донастроит под вас"
+                  : "Топовые запросы — мастер донастроит под вас (останется выбрать роль и детализацию)"}
               </p>
               <div className="grid grid-cols-2 gap-3">
-                {TOP_PRESETS.map((p) => (
+                {getTopPresetsForRole(profileRole).map((p) => (
                   <button
                     key={p.id}
                     type="button"
