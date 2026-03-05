@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { TOP_PRESETS } from "@/lib/wizard";
 
 const DEVICE_ID_KEY = "help-prompt-device-id";
@@ -47,6 +48,7 @@ export default function ChatPage() {
   const [wizardStep, setWizardStep] = useState<WizardState>(null);
   const [wizardLoading, setWizardLoading] = useState(false);
   const [wizardInput, setWizardInput] = useState("");
+  const [profileName, setProfileName] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -70,6 +72,14 @@ export default function ChatPage() {
   useEffect(() => {
     if (deviceId) fetchSessions();
   }, [deviceId, fetchSessions]);
+
+  useEffect(() => {
+    if (!deviceId) return;
+    fetch(`/api/profile?deviceId=${encodeURIComponent(deviceId)}`)
+      .then((res) => res.json())
+      .then((data: { name?: string }) => setProfileName(data.name?.trim() ?? ""))
+      .catch(() => {});
+  }, [deviceId]);
 
   // Мастер: загрузить текущий шаг, когда есть сессия и нет сообщений
   useEffect(() => {
@@ -558,6 +568,12 @@ export default function ChatPage() {
             </button>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href="/profile"
+              className="rounded-xl px-3 py-1.5 text-sm font-medium text-[var(--color-secondary)] hover:bg-[rgba(42,91,111,0.08)]"
+            >
+              Профиль
+            </Link>
             {hasMessages && (
               <button
                 type="button"
@@ -641,7 +657,9 @@ export default function ChatPage() {
 
           {!hasMessages && !loading && (!wizardStep || wizardStep.completed) && (
             <div className="max-w-[600px] mx-auto py-10 px-6 text-center">
-              <h1 className="text-3xl font-semibold text-[var(--color-secondary)] mb-8">Чем могу помочь?</h1>
+              <h1 className="text-3xl font-semibold text-[var(--color-secondary)] mb-8">
+                Чем могу помочь{profileName ? `, ${profileName}` : ""}?
+              </h1>
               <button
                 type="button"
                 onClick={startWizard}

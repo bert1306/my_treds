@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getOrCreateUserByDeviceId } from "@/lib/user";
 
 /** POST /api/sessions — создать пустую сессию (для мастера перед первым сообщением). Body: { deviceId } */
 export async function POST(req: NextRequest) {
@@ -9,10 +10,7 @@ export async function POST(req: NextRequest) {
     if (!deviceId) {
       return NextResponse.json({ error: "deviceId required" }, { status: 400 });
     }
-    let user = await prisma.user.findFirst();
-    if (!user) {
-      user = await prisma.user.create({ data: { name: "Guest" } });
-    }
+    const user = await getOrCreateUserByDeviceId(deviceId);
     const session = await prisma.session.create({
       data: { userId: user.id, channel: "web", deviceId, title: "Новый диалог" },
     });

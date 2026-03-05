@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getOrCreateUserByDeviceId } from "@/lib/user";
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,17 +20,10 @@ export async function POST(req: NextRequest) {
       });
     }
     if (!sessionId) {
-      const user = await prisma.user.findFirst();
-      let userId: string;
-      if (user) {
-        userId = user.id;
-      } else {
-        const u = await prisma.user.create({ data: { name: "Guest" } });
-        userId = u.id;
-      }
+      const user = await getOrCreateUserByDeviceId(deviceId ?? "");
       const title = text.length > 60 ? `${text.slice(0, 57)}...` : text;
       const session = await prisma.session.create({
-        data: { userId, channel: "web", deviceId, title },
+        data: { userId: user.id, channel: "web", deviceId, title },
       });
       sessionId = session.id;
     }

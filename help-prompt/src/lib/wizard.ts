@@ -20,6 +20,18 @@ export type WizardStep = {
 
 export type CollectedMap = Record<string, string>;
 
+/** Варианты роли (мастер и профиль) */
+export const ROLE_OPTIONS: WizardChoice[] = [
+  { label: "Разработчик", value: "developer" },
+  { label: "Продакт-менеджер", value: "pm" },
+  { label: "Аналитик", value: "analyst" },
+  { label: "Студент", value: "student" },
+  { label: "Маркетолог", value: "marketer" },
+  { label: "Учитель / наставник", value: "teacher" },
+  { label: "Другое", value: "other" },
+  { label: "Не указывать", value: "none" },
+];
+
 const WIZARD_STEPS: WizardStep[] = [
   {
     stepIndex: 0,
@@ -46,16 +58,7 @@ const WIZARD_STEPS: WizardStep[] = [
     type: "choice",
     question: "Ваша роль (для адаптации стиля)?",
     dataKey: "role",
-    options: [
-      { label: "Разработчик", value: "developer" },
-      { label: "Продакт-менеджер", value: "pm" },
-      { label: "Аналитик", value: "analyst" },
-      { label: "Студент", value: "student" },
-      { label: "Маркетолог", value: "marketer" },
-      { label: "Учитель / наставник", value: "teacher" },
-      { label: "Другое", value: "other" },
-      { label: "Не указывать", value: "none" },
-    ],
+    options: ROLE_OPTIONS,
   },
   {
     stepIndex: 3,

@@ -8,12 +8,17 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(cuid())
-  email     String?   @unique
-  name      String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  sessions  Session[]
+  id           String    @id @default(cuid())
+  deviceId     String?   @unique // один пользователь на устройство (web); позже — привязка по логину
+  name         String?   // имя для обращения в диалогах
+  email        String?   @unique
+  login        String?   // заготовка под логин
+  passwordHash String?   // заготовка под пароль (хеш)
+  telegram     String?   // telegram username
+  role         String?   // роль из мастера (developer, pm, analyst, …); если задана — в мастере не спрашиваем
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
 }
 
 model Session {

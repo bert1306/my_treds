@@ -14,18 +14,27 @@ function collectedMapFromDb(
   return map;
 }
 
-/** GET /api/sessions/[id]/wizard/step — текущий шаг мастера или { completed: true } */
+/** GET /api/sessions/[id]/wizard/step — текущий шаг мастера или { completed: true }. Роль из профиля подставляется, шаг «роль» пропускается. */
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id: sessionId } = await params;
-    const rows = await prisma.collectedData.findMany({
-      where: { sessionId },
-      select: { key: true, value: true },
-    });
-    const collected = collectedMapFromDb(rows);
+    const [dataRows, session] = await Promise.all([
+      prisma.collectedData.findMany({
+        where: { sessionId },
+        select: { key: true, value: true },
+      }),
+      prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { user: { select: { role: true } } },
+      }),
+    ]);
+    const collected = collectedMapFromDb(dataRows);
+    if (session?.user?.role && collected.role === undefined) {
+      collected.role = session.user.role;
+    }
     if (isWizardCompleted(collected)) {
       return NextResponse.json({ completed: true });
     }
@@ -59,11 +68,20 @@ export async function POST(
     const { id: sessionId } = await params;
     const body = await req.json().catch(() => null);
     const value = typeof body?.value === "string" ? body.value.trim() : "";
-    const rows = await prisma.collectedData.findMany({
-      where: { sessionId },
-      select: { key: true, value: true },
-    });
-    const collected = collectedMapFromDb(rows);
+    const [dataRows, session] = await Promise.all([
+      prisma.collectedData.findMany({
+        where: { sessionId },
+        select: { key: true, value: true },
+      }),
+      prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { user: { select: { role: true } } },
+      }),
+    ]);
+    const collected = collectedMapFromDb(dataRows);
+    if (session?.user?.role && collected.role === undefined) {
+      collected.role = session.user.role;
+    }
     const current = getCurrentStep(collected);
     if (!current) {
       return NextResponse.json({ completed: true });

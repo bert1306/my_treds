@@ -31,11 +31,17 @@ export async function POST(
         { status: 400 }
       );
     }
-    const rows = await prisma.collectedData.findMany({
-      where: { sessionId },
-      select: { key: true, value: true },
-    });
-    const collected = collectedMapFromDb(rows);
+    const [dataRows, session] = await Promise.all([
+      prisma.collectedData.findMany({
+        where: { sessionId },
+        select: { key: true, value: true },
+      }),
+      prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { user: { select: { role: true } } },
+      }),
+    ]);
+    const collected = collectedMapFromDb(dataRows);
     const updates: Record<string, string> = {
       goal: preset.goal,
       goalDetail: preset.goalDetail,
@@ -47,7 +53,10 @@ export async function POST(
         update: { value },
       });
     }
-    const nextCollected: CollectedMap = { ...collected, ...updates };
+    let nextCollected: CollectedMap = { ...collected, ...updates };
+    if (session?.user?.role && nextCollected.role === undefined) {
+      nextCollected = { ...nextCollected, role: session.user.role };
+    }
     if (isWizardCompleted(nextCollected)) {
       return NextResponse.json({ completed: true });
     }
