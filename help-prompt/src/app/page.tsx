@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { TOP_PRESETS } from "@/lib/wizard";
 
 const DEVICE_ID_KEY = "help-prompt-device-id";
 
@@ -219,6 +220,48 @@ export default function ChatPage() {
         setMessages([]);
         setWizardInput("");
         fetchSessions();
+      }
+    } finally {
+      setWizardLoading(false);
+    }
+  }
+
+  /** Топовый запрос: создать сессию, применить пресет (goal + goalDetail), показать мастер с оставшимися шагами */
+  async function startWizardWithPreset(presetId: string) {
+    const devId = deviceId || getDeviceId();
+    if (!devId) return;
+    setWizardLoading(true);
+    try {
+      const sessionRes = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId: devId }),
+      });
+      const sessionData = (await sessionRes.json()) as { sessionId?: string };
+      const sid = sessionData.sessionId;
+      if (!sid) {
+        setWizardLoading(false);
+        return;
+      }
+      setSessionId(sid);
+      setMessages([]);
+      setWizardInput("");
+      fetchSessions();
+      const presetRes = await fetch(`/api/sessions/${sid}/wizard/preset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preset: presetId }),
+      });
+      const presetData = (await presetRes.json()) as {
+        completed?: boolean;
+        step?: WizardStepData;
+      };
+      if (presetData.completed) {
+        setWizardStep({ completed: true });
+      } else if (presetData.step) {
+        setWizardStep({ completed: false, step: presetData.step });
+      } else {
+        setWizardStep({ completed: true });
       }
     } finally {
       setWizardLoading(false);
@@ -607,20 +650,21 @@ export default function ChatPage() {
               >
                 {wizardLoading ? "Создаём диалог…" : "Настроить параметры (мастер)"}
               </button>
+              <p className="text-sm text-[var(--color-text-muted)] mb-3">
+                Топовые запросы — мастер донастроит под вас (останется выбрать роль и детализацию)
+              </p>
               <div className="grid grid-cols-2 gap-3">
-                {["Расскажи про тренды 2026", "Помоги сформулировать задачу", "Идеи для проекта", "Краткое резюме"].map((label) => (
+                {TOP_PRESETS.map((p) => (
                   <button
-                    key={label}
+                    key={p.id}
                     type="button"
-                    onClick={() => setInput(label)}
-                    className="rounded-2xl bg-[var(--color-surface)] p-4 text-left text-sm text-[var(--color-secondary)] shadow-[var(--shadow-sm)] hover:border-2 hover:border-[var(--color-primary)] hover:-translate-y-0.5 transition"
+                    onClick={() => startWizardWithPreset(p.id)}
+                    disabled={wizardLoading}
+                    className="rounded-2xl bg-[var(--color-surface)] p-4 text-left text-sm text-[var(--color-secondary)] shadow-[var(--shadow-sm)] hover:border-2 hover:border-[var(--color-primary)] hover:-translate-y-0.5 transition disabled:opacity-60"
                   >
-                    {label}
+                    {p.label}
                   </button>
                 ))}
-              </div>
-              <div className="mt-8 flex justify-center text-left w-full max-w-[600px] mx-auto">
-                {inputBlock}
               </div>
             </div>
           )}

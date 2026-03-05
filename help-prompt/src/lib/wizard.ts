@@ -163,4 +163,23 @@ export function getCurrentStep(collected: CollectedMap): {
   };
 }
 
+/** Топовые запросы: по клику подставляют goal + goalDetail, мастер донастраивает остальное (роль, детализация, контекст) */
+export type TopPreset = {
+  id: string;
+  label: string;
+  goal: string;
+  goalDetail: string;
+};
+
+export const TOP_PRESETS: TopPreset[] = [
+  { id: "trends", label: "Расскажи про тренды 2026", goal: "analyze", goalDetail: "trends" },
+  { id: "formulate", label: "Помоги сформулировать задачу", goal: "info", goalDetail: "explain" },
+  { id: "ideas", label: "Идеи для проекта", goal: "content", goalDetail: "creative" },
+  { id: "summary", label: "Краткое резюме", goal: "improve", goalDetail: "resize" },
+];
+
+export function getPresetById(id: string): TopPreset | undefined {
+  return TOP_PRESETS.find((p) => p.id === id);
+}
+
 export { WIZARD_STEPS };
