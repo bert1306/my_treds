@@ -65,12 +65,7 @@ const WIZARD_STEPS: WizardStep[] = [
     type: "choice",
     question: "Какой уровень детализации ответа нужен?",
     dataKey: "detailLevel",
-    options: [
-      { label: "Краткий обзор", value: "brief" },
-      { label: "Подробное объяснение", value: "detailed" },
-      { label: "Пошаговая инструкция", value: "stepwise" },
-      { label: "Сравнение вариантов", value: "compare" },
-    ],
+    options: DETAIL_LEVEL_OPTIONS_FULL,
   },
   {
     stepIndex: 4,
@@ -80,6 +75,43 @@ const WIZARD_STEPS: WizardStep[] = [
     optional: true,
   },
 ];
+
+/** В режиме пресета спрашиваем только: роль (если нет в профиле), детализация, контекст */
+const PRESET_REMAINING_KEYS: string[] = ["role", "detailLevel", "context"];
+
+/** Для пресета summary — только 2 варианта детализации (уровень сжатия). Остальные пресеты — все 4. */
+const DETAIL_LEVEL_OPTIONS_FULL: WizardChoice[] = [
+  { label: "Краткий обзор", value: "brief" },
+  { label: "Подробное объяснение", value: "detailed" },
+  { label: "Пошаговая инструкция", value: "stepwise" },
+  { label: "Сравнение вариантов", value: "compare" },
+];
+
+const DETAIL_LEVEL_OPTIONS_SUMMARY: WizardChoice[] = [
+  { label: "Краткий обзор", value: "brief" },
+  { label: "Подробное объяснение", value: "detailed" },
+];
+
+/** Пресет по собранным goal+goalDetail (если совпадают с одним из TOP_PRESETS). */
+export function getPresetIdFromCollected(collected: CollectedMap): string | null {
+  const goal = collected.goal?.trim();
+  const goalDetail = collected.goalDetail?.trim();
+  if (!goal || !goalDetail) return null;
+  const preset = TOP_PRESETS.find((p) => p.goal === goal && p.goalDetail === goalDetail);
+  return preset?.id ?? null;
+}
+
+/** В режиме пресета — список ключей шагов, которые ещё нужно показать (роль из профиля считаем заполненной). */
+export function getRemainingStepKeysForPreset(
+  collected: CollectedMap,
+  profileRole?: string | null
+): string[] {
+  const result: string[] = [];
+  if (!collected.role?.trim() && !profileRole?.trim()) result.push("role");
+  if (!collected.detailLevel?.trim()) result.push("detailLevel");
+  if (collected.context === undefined) result.push("context");
+  return result;
+}
 
 /** Варианты детализации цели в зависимости от выбора на шаге 1 */
 const GOAL_DETAIL_OPTIONS: Record<string, WizardChoice[]> = {
@@ -116,6 +148,12 @@ const GOAL_DETAIL_OPTIONS: Record<string, WizardChoice[]> = {
   ],
 };
 
+/** Конфиг шага по dataKey (для пресет-режима, когда шаги идут не по порядку WIZARD_STEPS). */
+const STEP_BY_KEY: Record<string, WizardStep> = {};
+for (const s of WIZARD_STEPS) {
+  STEP_BY_KEY[s.dataKey] = s;
+}
+
 function getStepOptions(step: WizardStep, collected: CollectedMap): WizardChoice[] | undefined {
   if (step.options) return step.options;
   if (step.dynamicOptionsFrom) {
@@ -137,31 +175,73 @@ export function getNextStepIndex(collected: CollectedMap): number {
   return WIZARD_STEPS.length;
 }
 
-/** Мастер завершён, если пройдены все обязательные шаги и хотя бы начат последний (optional) */
-export function isWizardCompleted(collected: CollectedMap): boolean {
+/** Мастер завершён: в полном режиме — все шаги; в пресет-режиме — роль, detailLevel и context (опц.) заполнены. */
+export function isWizardCompleted(
+  collected: CollectedMap,
+  options?: { profileRole?: string | null }
+): boolean {
+  const presetId = getPresetIdFromCollected(collected);
+  if (presetId) {
+    const remaining = getRemainingStepKeysForPreset(collected, options?.profileRole);
+    return remaining.length === 0;
+  }
   return getNextStepIndex(collected) >= WIZARD_STEPS.length;
 }
 
-/** Текущий шаг для отображения: вопрос, тип, опции (если choice). Если мастер завершён — null. */
-export function getCurrentStep(collected: CollectedMap): {
+export type CurrentStepResult = {
   stepIndex: number;
+  totalSteps: number;
   type: WizardStepType;
   question: string;
   dataKey: string;
   options?: WizardChoice[];
   optional?: boolean;
-} | null {
+};
+
+/** Текущий шаг для отображения. В пресет-режиме: stepIndex/totalSteps относительные (1 из 3). */
+export function getCurrentStep(
+  collected: CollectedMap,
+  options?: { profileRole?: string | null }
+): CurrentStepResult | null {
+  const presetId = getPresetIdFromCollected(collected);
+  const profileRole = options?.profileRole;
+
+  if (presetId) {
+    const remaining = getRemainingStepKeysForPreset(collected, profileRole);
+    if (remaining.length === 0) return null;
+    const totalSteps = (!profileRole?.trim() ? 1 : 0) + 1 + 1; // роль (если спрашиваем) + detailLevel + context
+    const stepIndex = totalSteps - remaining.length;
+    const dataKey = remaining[0];
+    const step = STEP_BY_KEY[dataKey];
+    if (!step) return null;
+    let stepOptions = getStepOptions(step, collected);
+    if (dataKey === "detailLevel" && presetId === "summary") {
+      stepOptions = DETAIL_LEVEL_OPTIONS_SUMMARY;
+    }
+    if (step.type === "choice" && !stepOptions) return null;
+    return {
+      stepIndex,
+      totalSteps,
+      type: step.type,
+      question: step.question,
+      dataKey: step.dataKey,
+      options: stepOptions,
+      optional: step.optional,
+    };
+  }
+
   const idx = getNextStepIndex(collected);
   if (idx >= WIZARD_STEPS.length) return null;
   const step = WIZARD_STEPS[idx];
-  const options = getStepOptions(step, collected);
-  if (step.type === "choice" && !options) return null; // для шага 2 ещё нет goal — не должно случиться при пошаговом прохождении
+  const stepOptions = getStepOptions(step, collected);
+  if (step.type === "choice" && !stepOptions) return null;
   return {
     stepIndex: step.stepIndex,
+    totalSteps: WIZARD_STEPS.length,
     type: step.type,
     question: step.question,
     dataKey: step.dataKey,
-    options,
+    options: stepOptions,
     optional: step.optional,
   };
 }

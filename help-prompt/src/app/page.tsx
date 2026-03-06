@@ -21,6 +21,7 @@ type SessionItem = { id: string; title: string; isFavorite: boolean; createdAt: 
 
 type WizardStepData = {
   stepIndex: number;
+  totalSteps?: number;
   type: "choice" | "text";
   question: string;
   dataKey: string;
@@ -687,7 +688,7 @@ export default function ChatPage() {
             <div className="max-w-[560px] mx-auto py-10 px-6">
               <div className="flex items-center justify-between gap-4 mb-4">
                 <p className="text-sm text-[var(--color-text-muted)]">
-                  Шаг {wizardStep.step.stepIndex + 1} из 5
+                  Шаг {wizardStep.step.stepIndex + 1} из {wizardStep.step.totalSteps ?? 5}
                 </p>
                 <button
                   type="button"

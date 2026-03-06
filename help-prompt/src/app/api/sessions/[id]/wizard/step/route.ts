@@ -41,13 +41,14 @@ export async function GET(
       }),
     ]);
     const collected = collectedMapFromDb(dataRows);
-    if (session?.user?.role && collected.role === undefined) {
-      collected.role = session.user.role;
+    const profileRole = session?.user?.role ?? null;
+    if (profileRole && collected.role === undefined) {
+      collected.role = profileRole;
     }
-    if (isWizardCompleted(collected)) {
+    if (isWizardCompleted(collected, { profileRole })) {
       return NextResponse.json({ completed: true });
     }
-    const step = getCurrentStep(collected);
+    const step = getCurrentStep(collected, { profileRole });
     if (!step) {
       return NextResponse.json({ completed: true });
     }
@@ -55,6 +56,7 @@ export async function GET(
       completed: false,
       step: {
         stepIndex: step.stepIndex,
+        totalSteps: step.totalSteps,
         type: step.type,
         question: step.question,
         dataKey: step.dataKey,
@@ -96,10 +98,11 @@ export async function POST(
       }),
     ]);
     const collected = collectedMapFromDb(dataRows);
-    if (session?.user?.role && collected.role === undefined) {
-      collected.role = session.user.role;
+    const profileRole = session?.user?.role ?? null;
+    if (profileRole && collected.role === undefined) {
+      collected.role = profileRole;
     }
-    const current = getCurrentStep(collected);
+    const current = getCurrentStep(collected, { profileRole });
     if (!current) {
       return NextResponse.json({ completed: true });
     }
@@ -124,10 +127,10 @@ export async function POST(
       update: { value: value || "" },
     });
     const nextCollected = { ...collected, [current.dataKey]: value || "" };
-    if (isWizardCompleted(nextCollected)) {
+    if (isWizardCompleted(nextCollected, { profileRole })) {
       return NextResponse.json({ completed: true });
     }
-    const nextStep = getCurrentStep(nextCollected);
+    const nextStep = getCurrentStep(nextCollected, { profileRole });
     if (!nextStep) {
       return NextResponse.json({ completed: true });
     }
@@ -135,6 +138,7 @@ export async function POST(
       completed: false,
       step: {
         stepIndex: nextStep.stepIndex,
+        totalSteps: nextStep.totalSteps,
         type: nextStep.type,
         question: nextStep.question,
         dataKey: nextStep.dataKey,

@@ -63,13 +63,14 @@ export async function POST(
       });
     }
     let nextCollected: CollectedMap = { ...collected, ...updates };
-    if (session?.user?.role && nextCollected.role === undefined) {
-      nextCollected = { ...nextCollected, role: session.user.role };
+    const profileRole = session?.user?.role ?? null;
+    if (profileRole && nextCollected.role === undefined) {
+      nextCollected = { ...nextCollected, role: profileRole };
     }
-    if (isWizardCompleted(nextCollected)) {
+    if (isWizardCompleted(nextCollected, { profileRole })) {
       return NextResponse.json({ completed: true });
     }
-    const step = getCurrentStep(nextCollected);
+    const step = getCurrentStep(nextCollected, { profileRole });
     if (!step) {
       return NextResponse.json({ completed: true });
     }
@@ -77,6 +78,7 @@ export async function POST(
       completed: false,
       step: {
         stepIndex: step.stepIndex,
+        totalSteps: step.totalSteps,
         type: step.type,
         question: step.question,
         dataKey: step.dataKey,
