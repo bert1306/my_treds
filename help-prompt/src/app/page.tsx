@@ -66,7 +66,9 @@ export default function ChatPage() {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [editForm, setEditForm] = useState<{ role: string; detailLevel: string; context: string }>({ role: "", detailLevel: "", context: "" });
+  const [copyFeedback, setCopyFeedback] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const promptTextRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -933,19 +935,51 @@ export default function ChatPage() {
                 </div>
               ) : generatedPrompt ? (
                 <div className="space-y-3">
-                  <div className="rounded-2xl bg-[var(--color-surface)] p-5 text-sm text-[var(--color-secondary)] whitespace-pre-wrap border border-[rgba(42,91,111,0.1)]">
+                  <div
+                    ref={promptTextRef}
+                    className="rounded-2xl bg-[var(--color-surface)] p-5 text-sm text-[var(--color-secondary)] whitespace-pre-wrap border border-[rgba(42,91,111,0.1)]"
+                  >
                     {generatedPrompt}
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (generatedPrompt) {
-                        navigator.clipboard.writeText(generatedPrompt).catch(() => {});
+                    onClick={async () => {
+                      if (!generatedPrompt) return;
+                      try {
+                        if (navigator.clipboard?.writeText) {
+                          await navigator.clipboard.writeText(generatedPrompt);
+                        } else {
+                          const ta = document.createElement("textarea");
+                          ta.value = generatedPrompt;
+                          ta.setAttribute("readonly", "");
+                          ta.style.position = "absolute";
+                          ta.style.left = "-9999px";
+                          document.body.appendChild(ta);
+                          ta.select();
+                          document.execCommand("copy");
+                          document.body.removeChild(ta);
+                        }
+                        setCopyFeedback(true);
+                        setTimeout(() => setCopyFeedback(false), 2000);
+                      } catch {
+                        const ta = document.createElement("textarea");
+                        ta.value = generatedPrompt;
+                        ta.setAttribute("readonly", "");
+                        ta.style.position = "absolute";
+                        ta.style.left = "-9999px";
+                        document.body.appendChild(ta);
+                        ta.select();
+                        try {
+                          document.execCommand("copy");
+                          setCopyFeedback(true);
+                          setTimeout(() => setCopyFeedback(false), 2000);
+                        } catch {}
+                        document.body.removeChild(ta);
                       }
                     }}
                     className="rounded-xl px-4 py-2.5 text-sm font-medium text-[var(--color-primary)] bg-[var(--color-primary)]/10 hover:bg-[var(--color-primary)]/20 transition"
                   >
-                    Скопировать
+                    {copyFeedback ? "Скопировано" : "Скопировать"}
                   </button>
                 </div>
               ) : (
@@ -954,7 +988,7 @@ export default function ChatPage() {
                 </div>
               )}
               <p className="mt-6 text-sm text-[var(--color-text-muted)]">
-                Ниже можно написать первое сообщение в чат.
+                Промпт задаёт контекст для ответов ИИ. Напишите сообщение ниже — ответ придёт с учётом этого промпта.
               </p>
             </div>
           )}

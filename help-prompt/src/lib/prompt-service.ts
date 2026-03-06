@@ -73,12 +73,35 @@ export async function getCollectedDataForSession(
   return {
     context: raw.context?.trim() ?? "",
     detailLevel: detailLevelLabel,
+    detailLevelRaw: detailLevelValue,
     role: roleLabel,
     goal: raw.goal?.trim() ?? "",
     goalDetail: raw.goalDetail?.trim() ?? "",
     name: session?.user?.name?.trim() ?? "",
   };
 }
+
+/** Одна инструкция по формату ответа под выбранный уровень детализации (чтобы ИИ не путал «кратко» и «подробно»). */
+const DETAIL_LEVEL_INSTRUCTIONS: Record<string, Record<string, string>> = {
+  trends: {
+    brief: "Дай 5–7 тезисов с краткими пояснениями.",
+    detailed: "Разверни основные тренды с примерами.",
+    stepwise: "Опиши тренды и добавь, как учитывать их на практике.",
+    compare: "Выдели несколько направлений и сравни их.",
+  },
+  ideas: {
+    brief: "Дай 5–7 идей в виде тезисов.",
+    detailed: "Дай 3–5 идей с пояснением и развитием.",
+    stepwise: "Идеи плюс первые шаги по реализации.",
+    compare: "Несколько направлений с плюсами и минусами.",
+  },
+  summary: {
+    brief: "Выдели 5–7 главных тезисов или выводов.",
+    detailed: "Дай структурированное резюме по смысловым блокам.",
+    stepwise: "Выдели ключевые шаги и решения.",
+    compare: "Если в тексте несколько вариантов — кратко сравни их.",
+  },
+};
 
 /** Правила авто-выбора шаблона по goal + goalDetail (preset id). */
 const GOAL_DETAIL_TO_SLUG: Record<string, string> = {
@@ -118,6 +141,14 @@ export async function generatePromptForSession(
     const fallback = getTemplateBySlug("formulate");
     if (!fallback) throw new Error("No prompt template found");
     return buildPromptFromTemplate(fallback.body, data);
+  }
+
+  const instructions = DETAIL_LEVEL_INSTRUCTIONS[slug];
+  if (instructions && data.detailLevelRaw) {
+    data.detailLevelInstruction =
+      instructions[data.detailLevelRaw] ?? data.detailLevel;
+  } else {
+    data.detailLevelInstruction = data.detailLevel;
   }
 
   return buildPromptFromTemplate(template.body, data);
