@@ -186,13 +186,13 @@ function getStepOptions(step: WizardStep, collected: CollectedMap): WizardChoice
   return undefined;
 }
 
-/** Индекс следующего незаполненного шага; если все заполнены (с учётом optional) — возвращаем steps.length */
+/** Индекс следующего незаполненного шага; если все заполнены (с учётом optional) — возвращаем steps.length. Опциональный шаг показываем, пока пользователь его не прошёл (ключ не в collected). */
 export function getNextStepIndex(collected: CollectedMap): number {
   for (let i = 0; i < WIZARD_STEPS.length; i++) {
     const step = WIZARD_STEPS[i];
     const value = collected[step.dataKey]?.trim();
-    if (step.optional && (value === undefined || value === "")) continue; // optional пустой — считаем пройденным
-    if (!value) return i;
+    if (step.optional && collected.hasOwnProperty(step.dataKey)) continue; // пользователь уже прошёл этот шаг (ввёл или «Пропустить»)
+    if (!value) return i; // шаг ещё не заполнен — показываем его
   }
   return WIZARD_STEPS.length;
 }
