@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateUserByDeviceId } from "@/lib/user";
 import { getSessionIfOwned } from "@/lib/session";
+import { generatePromptForSession } from "@/lib/prompt-service";
+import { chatWithOllama, type OllamaMessage } from "@/lib/ollama";
+
+const MAX_HISTORY_MESSAGES = 24;
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,15 +42,48 @@ export async function POST(req: NextRequest) {
     }
 
     await prisma.message.create({
-      data: { sessionId, role: "USER", content: text },
+      data: { sessionId, role: "user", content: text },
     });
 
-    const reply = `Вы написали: «${text}». Это заглушка — позже здесь будет ответ ИИ.`;
+    const ollamaMessages: OllamaMessage[] = [];
+
+    if (sessionId) {
+      try {
+        const systemPrompt = await generatePromptForSession(sessionId);
+        if (systemPrompt.trim()) {
+          ollamaMessages.push({ role: "system", content: systemPrompt });
+        }
+      } catch {
+        // Нет CollectedData или ошибка — продолжаем без системного промпта
+      }
+    }
+
+    const history = await prisma.message.findMany({
+      where: { sessionId },
+      orderBy: { createdAt: "asc" },
+      select: { role: true, content: true },
+      take: MAX_HISTORY_MESSAGES + 1,
+    });
+    const lastN = history.slice(-MAX_HISTORY_MESSAGES);
+    for (const m of lastN) {
+      const role = m.role.toLowerCase() as "user" | "assistant";
+      if (role === "user" || role === "assistant") {
+        ollamaMessages.push({ role, content: m.content });
+      }
+    }
+
+    const result = await chatWithOllama(ollamaMessages);
+    const replyText = result.ok ? result.content : `[Ошибка] ${result.message}`;
+
     await prisma.message.create({
-      data: { sessionId, role: "ASSISTANT", content: reply },
+      data: { sessionId, role: "assistant", content: replyText },
     });
 
-    return NextResponse.json({ reply, sessionId });
+    return NextResponse.json({
+      reply: replyText,
+      sessionId,
+      ...(result.ok ? {} : { error: result.message }),
+    });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

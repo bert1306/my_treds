@@ -317,4 +317,19 @@ export function getPresetById(id: string): TopPreset | undefined {
   return TOP_PRESETS.find((p) => p.id === id);
 }
 
+/** Опции детализации для редактирования настроек (по пресету). */
+export function getDetailLevelOptionsForPreset(presetId: string | null): WizardChoice[] {
+  return presetId ? (DETAIL_LEVEL_OPTIONS_BY_PRESET[presetId] ?? DETAIL_LEVEL_OPTIONS_FULL) : DETAIL_LEVEL_OPTIONS_FULL;
+}
+
+export function getDetailLevelLabel(value: string): string {
+  const o = DETAIL_LEVEL_OPTIONS_FULL.find((x) => x.value === value);
+  return o?.label ?? value;
+}
+
+export function getRoleLabel(value: string): string {
+  const o = ROLE_OPTIONS.find((x) => x.value === value);
+  return o?.label ?? value;
+}
+
 export { WIZARD_STEPS };

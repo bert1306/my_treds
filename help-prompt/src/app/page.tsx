@@ -2,7 +2,15 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { getTopPresetsForRole } from "@/lib/wizard";
+import {
+  getTopPresetsForRole,
+  getPresetIdFromCollected,
+  getPresetById,
+  getDetailLevelOptionsForPreset,
+  getDetailLevelLabel,
+  getRoleLabel,
+  ROLE_OPTIONS,
+} from "@/lib/wizard";
 
 const DEVICE_ID_KEY = "help-prompt-device-id";
 
@@ -54,6 +62,10 @@ export default function ChatPage() {
   const [currentPresetId, setCurrentPresetId] = useState<string | null>(null);
   const [generatedPrompt, setGeneratedPrompt] = useState<string | null>(null);
   const [promptLoading, setPromptLoading] = useState(false);
+  const [sessionCollected, setSessionCollected] = useState<Record<string, string> | null>(null);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [editForm, setEditForm] = useState<{ role: string; detailLevel: string; context: string }>({ role: "", detailLevel: "", context: "" });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -158,6 +170,84 @@ export default function ChatPage() {
       cancelled = true;
     };
   }, [sessionId, wizardStep?.completed, messages.length, deviceId, currentPresetId]);
+
+  // Загрузить данные мастера для отображения «Параметры промпта» и редактирования (когда уже есть сообщения)
+  useEffect(() => {
+    if (!sessionId || !deviceId || messages.length === 0) {
+      setSessionCollected(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/sessions/${sessionId}/collected-data?deviceId=${encodeURIComponent(deviceId)}`)
+      .then((res) => (res.status === 200 ? res.json() : null))
+      .then((data: { collected?: Record<string, string> } | null) => {
+        if (!cancelled && data?.collected) setSessionCollected(data.collected);
+      })
+      .catch(() => {
+        if (!cancelled) setSessionCollected(null);
+      });
+    return () => { cancelled = true; };
+  }, [sessionId, deviceId, messages.length]);
+
+  const openSettingsModal = () => {
+    if (sessionCollected) {
+      setEditForm({
+        role: sessionCollected.role ?? "",
+        detailLevel: sessionCollected.detailLevel ?? "",
+        context: sessionCollected.context ?? "",
+      });
+    }
+    setSettingsModalOpen(true);
+  };
+
+  useEffect(() => {
+    if (settingsModalOpen && sessionCollected) {
+      setEditForm({
+        role: sessionCollected.role ?? "",
+        detailLevel: sessionCollected.detailLevel ?? "",
+        context: sessionCollected.context ?? "",
+      });
+    }
+  }, [settingsModalOpen, sessionCollected]);
+
+  async function saveSettings() {
+    if (!sessionId) return;
+    const devId = deviceId || getDeviceId();
+    setSettingsSaving(true);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/collected-data`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: devId,
+          collected: {
+            role: editForm.role,
+            detailLevel: editForm.detailLevel,
+            context: editForm.context,
+          },
+        }),
+      });
+      if (res.status === 403 || res.status === 404) {
+        setSettingsModalOpen(false);
+        return;
+      }
+      const data = (await res.json()) as { collected?: Record<string, string> };
+      if (data.collected) {
+        setSessionCollected(data.collected);
+        setSettingsModalOpen(false);
+        setGeneratedPrompt(null);
+        const params = new URLSearchParams({ deviceId: devId });
+        if (currentPresetId) params.set("presetId", currentPresetId);
+        const promptRes = await fetch(`/api/sessions/${sessionId}/prompt?${params}`);
+        if (promptRes.ok) {
+          const promptData = (await promptRes.json()) as { prompt?: string };
+          if (promptData.prompt) setGeneratedPrompt(promptData.prompt);
+        }
+      }
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
@@ -627,6 +717,87 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* Модалка редактирования настроек промпта (роль, детализация, контекст) */}
+      {settingsModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30"
+          onClick={() => !settingsSaving && setSettingsModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="settings-dialog-title"
+        >
+          <div
+            className="w-full max-w-md bg-[var(--color-surface)] rounded-2xl shadow-lg border border-[rgba(42,91,111,0.1)] p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="settings-dialog-title" className="text-lg font-semibold text-[var(--color-secondary)] mb-4">
+              Изменить настройки промпта
+            </h2>
+            <p className="text-sm text-[var(--color-text-muted)] mb-4">
+              Следующие сообщения в чате будут учитывать новые параметры.
+            </p>
+            {sessionCollected ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-secondary)] mb-1.5">Роль</label>
+                  <select
+                    value={editForm.role}
+                    onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}
+                    className="w-full rounded-xl border-2 border-[var(--color-input-border)] bg-[var(--color-bg)] px-4 py-2.5 text-sm text-[var(--color-secondary)] focus:border-[var(--color-primary)] outline-none"
+                  >
+                    {ROLE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-secondary)] mb-1.5">Уровень детализации</label>
+                  <select
+                    value={editForm.detailLevel}
+                    onChange={(e) => setEditForm((f) => ({ ...f, detailLevel: e.target.value }))}
+                    className="w-full rounded-xl border-2 border-[var(--color-input-border)] bg-[var(--color-bg)] px-4 py-2.5 text-sm text-[var(--color-secondary)] focus:border-[var(--color-primary)] outline-none"
+                  >
+                    {getDetailLevelOptionsForPreset(getPresetIdFromCollected(sessionCollected)).map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-secondary)] mb-1.5">Контекст (тема, текст)</label>
+                  <textarea
+                    value={editForm.context}
+                    onChange={(e) => setEditForm((f) => ({ ...f, context: e.target.value }))}
+                    placeholder="Необязательно"
+                    rows={3}
+                    className="w-full rounded-xl border-2 border-[var(--color-input-border)] bg-[var(--color-bg)] px-4 py-2.5 text-sm text-[var(--color-secondary)] placeholder:opacity-50 focus:border-[var(--color-primary)] outline-none resize-y"
+                  />
+                </div>
+                <div className="flex gap-3 justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => !settingsSaving && setSettingsModalOpen(false)}
+                    disabled={settingsSaving}
+                    className="px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--color-secondary)] bg-[var(--color-bg)] hover:bg-[rgba(42,91,111,0.08)] transition disabled:opacity-60"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveSettings}
+                    disabled={settingsSaving}
+                    className="px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] transition disabled:opacity-60"
+                  >
+                    {settingsSaving ? "Сохранение…" : "Сохранить"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--color-text-muted)] py-4">Загрузка параметров…</p>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 flex flex-col min-w-0">
         <header
           className={`header-bar fixed top-0 left-0 right-0 md:left-60 flex-shrink-0 flex items-center justify-between px-4 md:px-6 z-20 transition-[background-color,border-color] duration-200 ${headerOpaque ? "header-bar-opaque" : ""}`}
@@ -822,6 +993,37 @@ export default function ChatPage() {
             </div>
           )}
 
+          {hasMessages && sessionId && (
+            <div className="max-w-[800px] mx-auto px-4 py-2 flex flex-wrap items-center gap-2 text-sm text-[var(--color-text-muted)]">
+              <span className="font-medium text-[var(--color-secondary)]">Параметры промпта:</span>
+              {sessionCollected ? (
+                <>
+                  <span>
+                    {getPresetById(getPresetIdFromCollected(sessionCollected) ?? "")?.label ?? "—"}
+                    {" · "}
+                    {getDetailLevelLabel(sessionCollected.detailLevel || "")}
+                    {sessionCollected.context ? " · контекст задан" : ""}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={openSettingsModal}
+                    className="rounded-lg px-3 py-1.5 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition"
+                  >
+                    Изменить
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openSettingsModal}
+                  className="rounded-lg px-3 py-1.5 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition"
+                >
+                  Изменить настройки
+                </button>
+              )}
+            </div>
+          )}
+
           {messages.map((m) => (
             <div
               key={m.id}
@@ -839,7 +1041,9 @@ export default function ChatPage() {
                   className={`bubble rounded-[18px] px-5 py-4 shadow-[var(--shadow-sm)] ${
                     m.role === "user"
                       ? "bg-[var(--color-primary)] text-[var(--color-text-inverse)]"
-                      : "bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                      : m.content.startsWith("[Ошибка]")
+                        ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-red-300"
+                        : "bg-[var(--color-surface)] text-[var(--color-text-primary)]"
                   }`}
                 >
                   <p className="whitespace-pre-wrap text-base leading-relaxed">{m.content}</p>
