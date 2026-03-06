@@ -35,7 +35,7 @@ export const ROLE_OPTIONS: WizardChoice[] = [
 /** В режиме пресета спрашиваем только: роль (если нет в профиле), детализация, контекст */
 const PRESET_REMAINING_KEYS: string[] = ["role", "detailLevel", "context"];
 
-/** Для пресета summary — только 2 варианта детализации (уровень сжатия). Остальные пресеты — все 4. */
+/** Все 4 варианта детализации (полный мастер и пресет formulate). */
 const DETAIL_LEVEL_OPTIONS_FULL: WizardChoice[] = [
   { label: "Краткий обзор", value: "brief" },
   { label: "Подробное объяснение", value: "detailed" },
@@ -43,10 +43,32 @@ const DETAIL_LEVEL_OPTIONS_FULL: WizardChoice[] = [
   { label: "Сравнение вариантов", value: "compare" },
 ];
 
+/** Тренды 2026: только объём ответа — кратко или подробно (без пошагово/сравнение). */
+const DETAIL_LEVEL_OPTIONS_TRENDS: WizardChoice[] = [
+  { label: "Краткий обзор", value: "brief" },
+  { label: "Подробное объяснение", value: "detailed" },
+];
+
+/** Идеи для проекта: кратко, подробно, пошагово (без сравнение). */
+const DETAIL_LEVEL_OPTIONS_IDEAS: WizardChoice[] = [
+  { label: "Краткий обзор", value: "brief" },
+  { label: "Подробное объяснение", value: "detailed" },
+  { label: "Пошаговая инструкция", value: "stepwise" },
+];
+
+/** Краткое резюме: уровень сжатия — кратко или структурированно. */
 const DETAIL_LEVEL_OPTIONS_SUMMARY: WizardChoice[] = [
   { label: "Краткий обзор", value: "brief" },
   { label: "Подробное объяснение", value: "detailed" },
 ];
+
+/** Опции детализации по пресету: только уместные для шаблона. */
+const DETAIL_LEVEL_OPTIONS_BY_PRESET: Record<string, WizardChoice[]> = {
+  trends: DETAIL_LEVEL_OPTIONS_TRENDS,
+  formulate: DETAIL_LEVEL_OPTIONS_FULL,
+  ideas: DETAIL_LEVEL_OPTIONS_IDEAS,
+  summary: DETAIL_LEVEL_OPTIONS_SUMMARY,
+};
 
 const WIZARD_STEPS: WizardStep[] = [
   {
@@ -215,8 +237,8 @@ export function getCurrentStep(
     const step = STEP_BY_KEY[dataKey];
     if (!step) return null;
     let stepOptions = getStepOptions(step, collected);
-    if (dataKey === "detailLevel" && presetId === "summary") {
-      stepOptions = DETAIL_LEVEL_OPTIONS_SUMMARY;
+    if (dataKey === "detailLevel" && presetId) {
+      stepOptions = DETAIL_LEVEL_OPTIONS_BY_PRESET[presetId] ?? DETAIL_LEVEL_OPTIONS_FULL;
     }
     if (step.type === "choice" && !stepOptions) return null;
     return {
