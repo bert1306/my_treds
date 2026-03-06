@@ -32,6 +32,22 @@ export const ROLE_OPTIONS: WizardChoice[] = [
   { label: "Не указывать", value: "none" },
 ];
 
+/** В режиме пресета спрашиваем только: роль (если нет в профиле), детализация, контекст */
+const PRESET_REMAINING_KEYS: string[] = ["role", "detailLevel", "context"];
+
+/** Для пресета summary — только 2 варианта детализации (уровень сжатия). Остальные пресеты — все 4. */
+const DETAIL_LEVEL_OPTIONS_FULL: WizardChoice[] = [
+  { label: "Краткий обзор", value: "brief" },
+  { label: "Подробное объяснение", value: "detailed" },
+  { label: "Пошаговая инструкция", value: "stepwise" },
+  { label: "Сравнение вариантов", value: "compare" },
+];
+
+const DETAIL_LEVEL_OPTIONS_SUMMARY: WizardChoice[] = [
+  { label: "Краткий обзор", value: "brief" },
+  { label: "Подробное объяснение", value: "detailed" },
+];
+
 const WIZARD_STEPS: WizardStep[] = [
   {
     stepIndex: 0,
@@ -74,22 +90,6 @@ const WIZARD_STEPS: WizardStep[] = [
     dataKey: "context",
     optional: true,
   },
-];
-
-/** В режиме пресета спрашиваем только: роль (если нет в профиле), детализация, контекст */
-const PRESET_REMAINING_KEYS: string[] = ["role", "detailLevel", "context"];
-
-/** Для пресета summary — только 2 варианта детализации (уровень сжатия). Остальные пресеты — все 4. */
-const DETAIL_LEVEL_OPTIONS_FULL: WizardChoice[] = [
-  { label: "Краткий обзор", value: "brief" },
-  { label: "Подробное объяснение", value: "detailed" },
-  { label: "Пошаговая инструкция", value: "stepwise" },
-  { label: "Сравнение вариантов", value: "compare" },
-];
-
-const DETAIL_LEVEL_OPTIONS_SUMMARY: WizardChoice[] = [
-  { label: "Краткий обзор", value: "brief" },
-  { label: "Подробное объяснение", value: "detailed" },
 ];
 
 /** Пресет по собранным goal+goalDetail (если совпадают с одним из TOP_PRESETS). */
