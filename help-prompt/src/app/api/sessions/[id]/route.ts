@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSessionIfOwned } from "@/lib/session";
 
-/** PATCH /api/sessions/[id] — переименовать или избранное */
+/** PATCH /api/sessions/[id] — переименовать или избранное. Body: { deviceId, title?, isFavorite? }. 404/403 если не владелец. */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,7 +13,15 @@ export async function PATCH(
     if (!body || (typeof body.title !== "string" && typeof body.isFavorite !== "boolean")) {
       return NextResponse.json({ error: "title or isFavorite required" }, { status: 400 });
     }
-    const data: { title?: string; isFavorite?: boolean } = {};
+    const deviceId = (body.deviceId as string)?.trim() || null;
+    const owned = await getSessionIfOwned(id, deviceId);
+    if (owned.status === "not_found") {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+    if (owned.status === "forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const data: { title?: string | null; isFavorite?: boolean } = {};
     if (typeof body.title === "string") data.title = body.title.trim() || null;
     if (typeof body.isFavorite === "boolean") data.isFavorite = body.isFavorite;
     if (Object.keys(data).length === 0) {
@@ -26,13 +35,21 @@ export async function PATCH(
   }
 }
 
-/** DELETE /api/sessions/[id] — удалить диалог */
+/** DELETE /api/sessions/[id]?deviceId=xxx — удалить диалог. 404/403 если не владелец. */
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const deviceId = req.nextUrl.searchParams.get("deviceId");
+    const owned = await getSessionIfOwned(id, deviceId);
+    if (owned.status === "not_found") {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+    if (owned.status === "forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     await prisma.session.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (e) {

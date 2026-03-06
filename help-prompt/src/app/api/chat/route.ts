@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateUserByDeviceId } from "@/lib/user";
+import { getSessionIfOwned } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,13 +14,21 @@ export async function POST(req: NextRequest) {
 
     const deviceId = (body.deviceId as string)?.trim() || null;
     let sessionId = body.sessionId as string | undefined;
-    if (sessionId && deviceId) {
-      await prisma.session.updateMany({
-        where: { id: sessionId, deviceId: null },
-        data: { deviceId },
-      });
-    }
-    if (!sessionId) {
+    if (sessionId) {
+      const owned = await getSessionIfOwned(sessionId, deviceId);
+      if (owned.status === "not_found") {
+        return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      }
+      if (owned.status === "forbidden") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      if (owned.session.deviceId === null && deviceId) {
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: { deviceId },
+        });
+      }
+    } else {
       const user = await getOrCreateUserByDeviceId(deviceId ?? "");
       const title = text.length > 60 ? `${text.slice(0, 57)}...` : text;
       const session = await prisma.session.create({

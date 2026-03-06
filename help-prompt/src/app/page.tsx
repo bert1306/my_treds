@@ -91,11 +91,20 @@ export default function ChatPage() {
       setWizardStep(null);
       return;
     }
+    const devId = deviceId || getDeviceId();
+    if (!devId) {
+      setWizardStep({ completed: true });
+      return;
+    }
     let cancelled = false;
     setWizardStep(null);
     (async () => {
       try {
-        const res = await fetch(`/api/sessions/${sessionId}/wizard/step`);
+        const res = await fetch(`/api/sessions/${sessionId}/wizard/step?deviceId=${encodeURIComponent(devId)}`);
+        if (res.status === 403 || res.status === 404) {
+          if (!cancelled) goToMainMenu();
+          return;
+        }
         const data = (await res.json()) as { completed?: boolean; step?: WizardStepData };
         if (cancelled) return;
         if (data.completed) {
@@ -112,7 +121,7 @@ export default function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, messages.length]);
+  }, [sessionId, messages.length, deviceId]);
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
@@ -184,6 +193,12 @@ export default function ChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, sessionId, deviceId: devId }),
       });
+      if (res.status === 403 || res.status === 404) {
+        setMessages((prev) => prev.slice(0, -1));
+        goToMainMenu();
+        setLoading(false);
+        return;
+      }
       const data = (await res.json()) as { reply?: string; sessionId?: string };
       if (data.sessionId) {
         setSessionId(data.sessionId);
@@ -264,8 +279,13 @@ export default function ChatPage() {
       const presetRes = await fetch(`/api/sessions/${sid}/wizard/preset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ preset: presetId }),
+        body: JSON.stringify({ preset: presetId, deviceId: devId }),
       });
+      if (presetRes.status === 403 || presetRes.status === 404) {
+        goToMainMenu();
+        setWizardLoading(false);
+        return;
+      }
       const presetData = (await presetRes.json()) as {
         completed?: boolean;
         step?: WizardStepData;
@@ -284,13 +304,18 @@ export default function ChatPage() {
 
   async function submitWizardStep(value: string) {
     if (!sessionId || !wizardStep || wizardStep.completed) return;
+    const devId = deviceId || getDeviceId();
     setWizardLoading(true);
     try {
       const res = await fetch(`/api/sessions/${sessionId}/wizard/step`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value }),
+        body: JSON.stringify({ value, deviceId: devId }),
       });
+      if (res.status === 403 || res.status === 404) {
+        goToMainMenu();
+        return;
+      }
       const data = (await res.json()) as { completed?: boolean; step?: WizardStepData };
       if (data.completed) {
         setWizardStep({ completed: true });
@@ -306,8 +331,14 @@ export default function ChatPage() {
 
   async function openDialog(id: string) {
     setDialogsOpen(false);
+    const devId = deviceId || getDeviceId();
     try {
-      const res = await fetch(`/api/sessions/${id}/messages`);
+      const res = await fetch(`/api/sessions/${id}/messages?deviceId=${encodeURIComponent(devId)}`);
+      if (res.status === 403 || res.status === 404) {
+        goToMainMenu();
+        fetchSessions();
+        return;
+      }
       const data = (await res.json()) as { messages?: Message[] };
       const list = (data.messages ?? []).map((m) => ({
         ...m,
@@ -323,12 +354,17 @@ export default function ChatPage() {
   async function toggleFavorite(s: SessionItem, e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
+    const devId = deviceId || getDeviceId();
     try {
-      await fetch(`/api/sessions/${s.id}`, {
+      const res = await fetch(`/api/sessions/${s.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isFavorite: !s.isFavorite }),
+        body: JSON.stringify({ isFavorite: !s.isFavorite, deviceId: devId }),
       });
+      if (res.status === 403 || res.status === 404) {
+        fetchSessions();
+        return;
+      }
       fetchSessions();
     } catch {}
   }
@@ -343,12 +379,19 @@ export default function ChatPage() {
   async function submitRename() {
     if (!editingId) return;
     const title = editTitle.trim() || "Без названия";
+    const devId = deviceId || getDeviceId();
     try {
-      await fetch(`/api/sessions/${editingId}`, {
+      const res = await fetch(`/api/sessions/${editingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title, deviceId: devId }),
       });
+      if (res.status === 403 || res.status === 404) {
+        setEditingId(null);
+        setEditTitle("");
+        fetchSessions();
+        return;
+      }
       fetchSessions();
     } catch {}
     setEditingId(null);
@@ -365,8 +408,15 @@ export default function ChatPage() {
     const id = deleteConfirmId;
     if (!id) return;
     setDeleteConfirmId(null);
+    const devId = deviceId || getDeviceId();
     try {
-      await fetch(`/api/sessions/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/sessions/${id}?deviceId=${encodeURIComponent(devId)}`, { method: "DELETE" });
+      if (res.status === 403 || res.status === 404) {
+        if (sessionId === id) goToMainMenu();
+        fetchSessions();
+        setDialogsOpen(false);
+        return;
+      }
       if (sessionId === id) goToMainMenu();
       fetchSessions();
       setDialogsOpen(false);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSessionIfOwned } from "@/lib/session";
 import {
   getCurrentStep,
   isWizardCompleted,
@@ -14,13 +15,21 @@ function collectedMapFromDb(
   return map;
 }
 
-/** GET /api/sessions/[id]/wizard/step — текущий шаг мастера или { completed: true }. Роль из профиля подставляется, шаг «роль» пропускается. */
+/** GET /api/sessions/[id]/wizard/step?deviceId=xxx — текущий шаг мастера. 404/403 если не владелец. */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id: sessionId } = await params;
+    const deviceId = req.nextUrl.searchParams.get("deviceId");
+    const owned = await getSessionIfOwned(sessionId, deviceId);
+    if (owned.status === "not_found") {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+    if (owned.status === "forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const [dataRows, session] = await Promise.all([
       prisma.collectedData.findMany({
         where: { sessionId },
@@ -59,7 +68,7 @@ export async function GET(
   }
 }
 
-/** POST /api/sessions/[id]/wizard/step — отправить ответ на текущий шаг. Body: { value: string } */
+/** POST /api/sessions/[id]/wizard/step — отправить ответ. Body: { deviceId, value }. 404/403 если не владелец. */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -67,6 +76,14 @@ export async function POST(
   try {
     const { id: sessionId } = await params;
     const body = await req.json().catch(() => null);
+    const deviceId = (body?.deviceId as string)?.trim() || null;
+    const owned = await getSessionIfOwned(sessionId, deviceId);
+    if (owned.status === "not_found") {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+    if (owned.status === "forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const value = typeof body?.value === "string" ? body.value.trim() : "";
     const [dataRows, session] = await Promise.all([
       prisma.collectedData.findMany({

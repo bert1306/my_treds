@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSessionIfOwned } from "@/lib/session";
 import {
   getCurrentStep,
   getPresetById,
@@ -15,7 +16,7 @@ function collectedMapFromDb(
   return map;
 }
 
-/** POST /api/sessions/[id]/wizard/preset — применить топовый запрос (goal + goalDetail), вернуть текущий шаг мастера */
+/** POST /api/sessions/[id]/wizard/preset — применить топовый запрос. Body: { deviceId, preset }. 404/403 если не владелец. */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,6 +24,14 @@ export async function POST(
   try {
     const { id: sessionId } = await params;
     const body = await req.json().catch(() => null);
+    const deviceId = (body?.deviceId as string)?.trim() || null;
+    const owned = await getSessionIfOwned(sessionId, deviceId);
+    if (owned.status === "not_found") {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+    if (owned.status === "forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const presetId = typeof body?.preset === "string" ? body.preset.trim() : "";
     const preset = getPresetById(presetId);
     if (!preset) {
