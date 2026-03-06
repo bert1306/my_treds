@@ -301,16 +301,15 @@ export default function ChatPage() {
     };
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text || loading) return;
+  /** Отправить сообщение в чат (используется и формой, и кнопкой «Получить ответ»). */
+  async function sendMessage(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || loading || !sessionId) return;
     const devId = deviceId || getDeviceId();
-    setInput("");
     const userMsg: Message = {
       id: `u-${Date.now()}`,
       role: "user",
-      content: text,
+      content: trimmed,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMsg]);
@@ -319,7 +318,7 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, sessionId, deviceId: devId }),
+        body: JSON.stringify({ message: trimmed, sessionId, deviceId: devId }),
       });
       if (res.status === 403 || res.status === 404) {
         setMessages((prev) => prev.slice(0, -1));
@@ -347,6 +346,14 @@ export default function ChatPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text || loading) return;
+    setInput("");
+    await sendMessage(text);
   }
 
   const hasMessages = messages.length > 0;
@@ -941,14 +948,36 @@ export default function ChatPage() {
                   >
                     {generatedPrompt}
                   </div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!generatedPrompt) return;
-                      try {
-                        if (navigator.clipboard?.writeText) {
-                          await navigator.clipboard.writeText(generatedPrompt);
-                        } else {
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => sendMessage("Начни")}
+                      disabled={loading}
+                      className="rounded-xl px-5 py-2.5 text-sm font-medium text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] transition disabled:opacity-60"
+                    >
+                      {loading ? "Отправка…" : "Получить ответ"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!generatedPrompt) return;
+                        try {
+                          if (navigator.clipboard?.writeText) {
+                            await navigator.clipboard.writeText(generatedPrompt);
+                          } else {
+                            const ta = document.createElement("textarea");
+                            ta.value = generatedPrompt;
+                            ta.setAttribute("readonly", "");
+                            ta.style.position = "absolute";
+                            ta.style.left = "-9999px";
+                            document.body.appendChild(ta);
+                            ta.select();
+                            document.execCommand("copy");
+                            document.body.removeChild(ta);
+                          }
+                          setCopyFeedback(true);
+                          setTimeout(() => setCopyFeedback(false), 2000);
+                        } catch {
                           const ta = document.createElement("textarea");
                           ta.value = generatedPrompt;
                           ta.setAttribute("readonly", "");
@@ -956,31 +985,19 @@ export default function ChatPage() {
                           ta.style.left = "-9999px";
                           document.body.appendChild(ta);
                           ta.select();
-                          document.execCommand("copy");
+                          try {
+                            document.execCommand("copy");
+                            setCopyFeedback(true);
+                            setTimeout(() => setCopyFeedback(false), 2000);
+                          } catch {}
                           document.body.removeChild(ta);
                         }
-                        setCopyFeedback(true);
-                        setTimeout(() => setCopyFeedback(false), 2000);
-                      } catch {
-                        const ta = document.createElement("textarea");
-                        ta.value = generatedPrompt;
-                        ta.setAttribute("readonly", "");
-                        ta.style.position = "absolute";
-                        ta.style.left = "-9999px";
-                        document.body.appendChild(ta);
-                        ta.select();
-                        try {
-                          document.execCommand("copy");
-                          setCopyFeedback(true);
-                          setTimeout(() => setCopyFeedback(false), 2000);
-                        } catch {}
-                        document.body.removeChild(ta);
-                      }
-                    }}
-                    className="rounded-xl px-4 py-2.5 text-sm font-medium text-[var(--color-primary)] bg-[var(--color-primary)]/10 hover:bg-[var(--color-primary)]/20 transition"
-                  >
-                    {copyFeedback ? "Скопировано" : "Скопировать"}
-                  </button>
+                      }}
+                      className="rounded-xl px-4 py-2.5 text-sm font-medium text-[var(--color-primary)] bg-[var(--color-primary)]/10 hover:bg-[var(--color-primary)]/20 transition"
+                    >
+                      {copyFeedback ? "Скопировано" : "Скопировать"}
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-2xl bg-[var(--color-surface)] p-5 text-sm text-[var(--color-text-muted)]">
@@ -988,7 +1005,7 @@ export default function ChatPage() {
                 </div>
               )}
               <p className="mt-6 text-sm text-[var(--color-text-muted)]">
-                Промпт задаёт контекст для ответов ИИ. Напишите сообщение ниже — ответ придёт с учётом этого промпта.
+                Нажмите «Получить ответ» — ИИ ответит с учётом промпта выше. Или напишите свой вопрос в чате ниже.
               </p>
             </div>
           )}
