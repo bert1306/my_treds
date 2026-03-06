@@ -50,6 +50,9 @@ export default function ChatPage() {
   const [wizardInput, setWizardInput] = useState("");
   const [profileName, setProfileName] = useState("");
   const [profileRole, setProfileRole] = useState<string | null>(null);
+  const [currentPresetId, setCurrentPresetId] = useState<string | null>(null);
+  const [generatedPrompt, setGeneratedPrompt] = useState<string | null>(null);
+  const [promptLoading, setPromptLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -122,6 +125,38 @@ export default function ChatPage() {
       cancelled = true;
     };
   }, [sessionId, messages.length, deviceId]);
+
+  // После завершения мастера — загрузить сгенерированный промпт для предпросмотра
+  useEffect(() => {
+    if (!sessionId || !wizardStep?.completed || messages.length > 0) {
+      setGeneratedPrompt(null);
+      return;
+    }
+    const devId = deviceId || getDeviceId();
+    if (!devId) return;
+    let cancelled = false;
+    setPromptLoading(true);
+    const params = new URLSearchParams({ deviceId: devId });
+    if (currentPresetId) params.set("presetId", currentPresetId);
+    fetch(`/api/sessions/${sessionId}/prompt?${params}`)
+      .then((res) => {
+        if (res.status === 403 || res.status === 404) return null;
+        return res.json();
+      })
+      .then((data: { prompt?: string } | null) => {
+        if (!cancelled && data?.prompt) setGeneratedPrompt(data.prompt);
+        else if (!cancelled) setGeneratedPrompt(null);
+      })
+      .catch(() => {
+        if (!cancelled) setGeneratedPrompt(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPromptLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, wizardStep?.completed, messages.length, deviceId, currentPresetId]);
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
@@ -228,6 +263,8 @@ export default function ChatPage() {
     setSessionId(null);
     setWizardStep(null);
     setWizardInput("");
+    setCurrentPresetId(null);
+    setGeneratedPrompt(null);
     setDialogsOpen(false);
     areaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -248,6 +285,8 @@ export default function ChatPage() {
         setSessionId(data.sessionId);
         setMessages([]);
         setWizardInput("");
+        setCurrentPresetId(null);
+        setGeneratedPrompt(null);
         fetchSessions();
       }
     } finally {
@@ -275,6 +314,8 @@ export default function ChatPage() {
       setSessionId(sid);
       setMessages([]);
       setWizardInput("");
+      setCurrentPresetId(presetId);
+      setGeneratedPrompt(null);
       fetchSessions();
       const presetRes = await fetch(`/api/sessions/${sid}/wizard/preset`, {
         method: "POST",
@@ -709,7 +750,44 @@ export default function ChatPage() {
             </div>
           )}
 
-          {!hasMessages && !loading && (!wizardStep || wizardStep.completed) && (
+          {sessionId && wizardStep?.completed && !hasMessages && (
+            <div className="max-w-[640px] mx-auto py-8 px-6">
+              <h2 className="text-lg font-semibold text-[var(--color-secondary)] mb-3">
+                Ваш промпт
+              </h2>
+              {promptLoading ? (
+                <div className="rounded-2xl bg-[var(--color-surface)] p-5 text-sm text-[var(--color-text-muted)]">
+                  Загрузка…
+                </div>
+              ) : generatedPrompt ? (
+                <div className="space-y-3">
+                  <div className="rounded-2xl bg-[var(--color-surface)] p-5 text-sm text-[var(--color-secondary)] whitespace-pre-wrap border border-[rgba(42,91,111,0.1)]">
+                    {generatedPrompt}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (generatedPrompt) {
+                        navigator.clipboard.writeText(generatedPrompt).catch(() => {});
+                      }
+                    }}
+                    className="rounded-xl px-4 py-2.5 text-sm font-medium text-[var(--color-primary)] bg-[var(--color-primary)]/10 hover:bg-[var(--color-primary)]/20 transition"
+                  >
+                    Скопировать
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-[var(--color-surface)] p-5 text-sm text-[var(--color-text-muted)]">
+                  Не удалось загрузить промпт.
+                </div>
+              )}
+              <p className="mt-6 text-sm text-[var(--color-text-muted)]">
+                Ниже можно написать первое сообщение в чат.
+              </p>
+            </div>
+          )}
+
+          {!hasMessages && !loading && (!wizardStep || wizardStep.completed) && !sessionId && (
             <div className="max-w-[600px] mx-auto py-10 px-6 text-center">
               <h1 className="text-3xl font-semibold text-[var(--color-secondary)] mb-8">
                 Чем могу помочь{profileName ? `, ${profileName}` : ""}?
@@ -785,7 +863,7 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {hasMessages && (
+        {(hasMessages || (sessionId && wizardStep?.completed)) && (
           <div className="input-area">
             <div className="max-w-[800px] mx-auto w-full">
               {inputBlock}
